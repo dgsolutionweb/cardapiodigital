@@ -17,6 +17,7 @@ export default function Home() {
   const [businessHours, setBusinessHours] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
   const [loadingSettings, setLoadingSettings] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
   
   // Buscar configurações da loja
   useEffect(() => {
@@ -112,6 +113,8 @@ export default function Home() {
                 type="search" 
                 className="block w-full py-2 pl-10 pr-3 text-sm bg-gray-100 border border-gray-200 rounded-lg focus:ring-primary focus:border-primary focus:outline-none" 
                 placeholder="Buscar produtos..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
@@ -150,14 +153,6 @@ export default function Home() {
           <div className="max-w-lg">
             <h2 className="text-2xl md:text-3xl font-bold mb-2">Bem-vindo ao nosso Cardápio Digital</h2>
             <p className="text-white/90 mb-4">Descubra nossos produtos deliciosos e faça seu pedido com apenas alguns cliques.</p>
-            <div className="flex space-x-3 mt-4">
-              <button className="bg-white text-primary py-2 px-4 rounded-full font-medium shadow-md hover:shadow-lg transition-all">
-                Ver promoções
-              </button>
-              <button className="bg-white/20 text-white border border-white/30 py-2 px-4 rounded-full font-medium hover:bg-white/30 transition-all">
-                Como funciona
-              </button>
-            </div>
           </div>
         </div>
         {/* Decorative elements */}
@@ -177,6 +172,8 @@ export default function Home() {
             type="search" 
             className="block w-full py-3 pl-10 pr-3 text-sm bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-primary focus:border-primary focus:outline-none" 
             placeholder="Buscar produtos..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
@@ -211,7 +208,7 @@ export default function Home() {
               </button>
             </div>
           </div>
-          <ProductList storeOpen={storeOpen} />
+          <ProductList storeOpen={storeOpen} searchTerm={searchTerm} />
         </section>
       </div>
       
