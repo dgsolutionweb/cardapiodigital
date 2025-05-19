@@ -15,12 +15,18 @@ export interface ExtraItem {
 
 export interface CartItem {
   id: string
+  product_id?: string
   name: string
   price: number
   quantity: number
+  image_url?: string
   imageUrl?: string
   variation?: VariationItem
+  variation_name?: string
+  variation_id?: string
   extras?: ExtraItem[]
+  extras_info?: string
+  extras_ids?: string[]
 }
 
 interface CartStore {
