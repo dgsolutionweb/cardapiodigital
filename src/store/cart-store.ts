@@ -1,12 +1,26 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+export interface VariationItem {
+  id: string
+  name: string
+  price: number
+}
+
+export interface ExtraItem {
+  id: string
+  name: string
+  price: number
+}
+
 export interface CartItem {
   id: string
   name: string
   price: number
   quantity: number
   imageUrl?: string
+  variation?: VariationItem
+  extras?: ExtraItem[]
 }
 
 interface CartStore {

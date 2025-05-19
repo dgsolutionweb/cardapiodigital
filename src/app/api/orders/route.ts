@@ -47,14 +47,32 @@ export async function POST(request: Request) {
     }
     
     // Inserir os itens do pedido
-    const orderItems = items.map((item: any) => ({
-      id: crypto.randomUUID(),
-      order_id: orderId,
-      product_id: item.id,
-      product_name: item.name,
-      quantity: item.quantity,
-      unit_price: item.price,
-    }))
+    const orderItems = items.map((item: any) => {
+      // Preparar informações de variação e adicionais
+      let variationName = null;
+      let extrasInfo = null;
+      
+      // Se o item tem uma variação selecionada
+      if (item.variation) {
+        variationName = item.variation.name;
+      }
+      
+      // Se o item tem adicionais selecionados
+      if (item.extras && item.extras.length > 0) {
+        extrasInfo = item.extras.map((extra: any) => extra.name).join(', ');
+      }
+      
+      return {
+        id: crypto.randomUUID(),
+        order_id: orderId,
+        product_id: item.id,
+        product_name: item.name,
+        quantity: item.quantity,
+        unit_price: item.price,
+        variation_name: variationName,
+        extras_info: extrasInfo
+      };
+    })
     
     const { error: itemsError } = await supabase
       .from('order_items')

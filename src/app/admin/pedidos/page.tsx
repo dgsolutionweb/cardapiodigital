@@ -13,6 +13,8 @@ type OrderWithItems = Order & {
     product_name: string
     quantity: number
     unit_price: number
+    variation_name?: string
+    extras_info?: string
   }>
 }
 
@@ -67,6 +69,8 @@ export default function OrdersPage() {
               id,
               quantity,
               unit_price,
+              variation_name,
+              extras_info,
               products (id, name)
             `)
             .eq('order_id', order.id)
@@ -78,7 +82,9 @@ export default function OrdersPage() {
             id: item.id,
             product_name: item.products.name,
             quantity: item.quantity,
-            unit_price: item.unit_price
+            unit_price: item.unit_price,
+            variation_name: item.variation_name || undefined,
+            extras_info: item.extras_info || undefined
           })) || []
           
           ordersWithItems.push({
@@ -262,8 +268,18 @@ export default function OrdersPage() {
                     <tbody className="divide-y divide-gray-200">
                       {selectedOrder.items.map(item => (
                         <tr key={item.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            {item.product_name}
+                          <td className="px-4 py-2">
+                            <div className="font-medium">{item.product_name}</div>
+                            {item.variation_name && (
+                              <div className="text-xs text-gray-600 mt-1">
+                                <span className="font-medium">Variação:</span> {item.variation_name}
+                              </div>
+                            )}
+                            {item.extras_info && (
+                              <div className="text-xs text-gray-600 mt-1">
+                                <span className="font-medium">Adicionais:</span> {item.extras_info}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-2 whitespace-nowrap">
                             {item.quantity}

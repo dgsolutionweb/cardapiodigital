@@ -13,6 +13,8 @@ type OrderItem = {
   product_name: string
   quantity: number
   unit_price: number
+  variation_name?: string
+  extras_info?: string
 }
 
 // Tipo simplificado para nossos pedidos com itens
@@ -120,6 +122,49 @@ export default function KitchenPage() {
     }
   }
   
+  // Configurações da loja e logo para exibir na comanda
+  const [storeName, setStoreName] = useState<string>('Cardápio Digital')
+  const [storeLogo, setStoreLogo] = useState<string>('')
+  const [storeAddress, setStoreAddress] = useState<string>('')
+  const [storePhone, setStorePhone] = useState<string>('')
+
+  // Buscar informações da loja
+  useEffect(() => {
+    const fetchStoreSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('key, value')
+          .in('key', ['store_name', 'logo_url', 'address', 'phone'])
+        
+        if (error) throw error
+        
+        if (data) {
+          data.forEach(setting => {
+            switch(setting.key) {
+              case 'store_name':
+                setStoreName(setting.value)
+                break
+              case 'logo_url':
+                setStoreLogo(setting.value)
+                break
+              case 'address':
+                setStoreAddress(setting.value)
+                break
+              case 'phone':
+                setStorePhone(setting.value)
+                break
+            }
+          })
+        }
+      } catch (error) {
+        console.error('Erro ao buscar configurações da loja:', error)
+      }
+    }
+    
+    fetchStoreSettings()
+  }, [])
+  
   const fetchOrders = async () => {
     try {
       setLoading(true)
@@ -147,6 +192,8 @@ export default function KitchenPage() {
               id,
               quantity,
               unit_price,
+              variation_name,
+              extras_info,
               products (name)
             `)
             .eq('order_id', order.id)
@@ -156,7 +203,9 @@ export default function KitchenPage() {
             id: item.id,
             product_name: item.products?.name || 'Produto sem nome',
             quantity: item.quantity,
-            unit_price: item.unit_price
+            unit_price: item.unit_price,
+            variation_name: item.variation_name || undefined,
+            extras_info: item.extras_info || undefined
           })) || []
           
           if (itemsError) throw itemsError
@@ -293,13 +342,27 @@ export default function KitchenPage() {
       
       {/* Área de impressão - visível apenas durante a impressão */}
       {selectedOrderToPrint && (
-        <div className="print-section p-8 font-mono text-sm">
-          <div className="text-center mb-4">
-            <h2 className="text-xl font-bold">COMANDA #{selectedOrderToPrint.id.slice(0, 8)}</h2>
-            <p>{new Date(selectedOrderToPrint.created_at).toLocaleString('pt-BR')}</p>
+        <div className="print-section p-4 font-sans text-sm">
+          {/* Cabeçalho com logo e informações do estabelecimento */}
+          <div className="text-center mb-4 border-b-2 border-gray-800 pb-3">
+            {storeLogo && (
+              <div className="flex justify-center mb-2">
+                <img src={storeLogo} alt={storeName} className="h-16 object-contain" />
+              </div>
+            )}
+            <h2 className="text-xl font-bold">{storeName}</h2>
+            {storeAddress && <p className="text-xs">{storeAddress}</p>}
+            {storePhone && <p className="text-xs">Tel: {storePhone}</p>}
           </div>
           
-          <div className="mb-4">
+          {/* Informações do pedido */}
+          <div className="text-center mb-4 bg-gray-100 py-2 rounded-lg">
+            <h2 className="text-xl font-bold">COMANDA #{selectedOrderToPrint.id.slice(0, 8)}</h2>
+            <p className="text-sm">{new Date(selectedOrderToPrint.created_at).toLocaleString('pt-BR')}</p>
+          </div>
+          
+          {/* Dados do cliente */}
+          <div className="mb-4 border border-gray-300 rounded-lg p-3">
             <p><strong>Cliente:</strong> {selectedOrderToPrint.customer_name}</p>
             <p><strong>Telefone:</strong> {selectedOrderToPrint.customer_phone}</p>
             {selectedOrderToPrint.delivery_address && (
@@ -308,43 +371,65 @@ export default function KitchenPage() {
             <p><strong>Pagamento:</strong> {selectedOrderToPrint.payment_method.toUpperCase()}</p>
           </div>
           
+          {/* Itens do pedido */}
           <div className="mb-4">
-            <h3 className="font-bold border-b-2 border-black pb-1 mb-2">ITENS</h3>
-            <table className="w-full">
-              <thead>
+            <h3 className="font-bold bg-gray-800 text-white py-1 px-2 rounded-t-lg">ITENS DO PEDIDO</h3>
+            <table className="w-full border border-gray-300">
+              <thead className="bg-gray-100">
                 <tr>
-                  <th className="text-left">Qtd</th>
-                  <th className="text-left">Item</th>
-                  <th className="text-right">Valor</th>
+                  <th className="text-left p-2 border-b">Qtd</th>
+                  <th className="text-left p-2 border-b">Item</th>
+                  <th className="text-right p-2 border-b">Valor</th>
                 </tr>
               </thead>
               <tbody>
                 {selectedOrderToPrint.items.map(item => (
-                  <tr key={item.id}>
-                    <td className="pr-2">{item.quantity}x</td>
-                    <td>{item.product_name}</td>
-                    <td className="text-right">{formatCurrency(item.unit_price * item.quantity)}</td>
-                  </tr>
+                  <React.Fragment key={item.id}>
+                    <tr>
+                      <td className="p-2 border-b">{item.quantity}x</td>
+                      <td className="p-2 border-b">{item.product_name}</td>
+                      <td className="p-2 text-right border-b">{formatCurrency(item.unit_price * item.quantity)}</td>
+                    </tr>
+                    {/* Variação (se existir) */}
+                    {item.variation_name && (
+                      <tr>
+                        <td className="pl-4 text-xs text-gray-600" colSpan={3}>
+                          <span className="font-medium">▹ Variação:</span> {item.variation_name}
+                        </td>
+                      </tr>
+                    )}
+                    {/* Adicionais (se existirem) */}
+                    {item.extras_info && (
+                      <tr>
+                        <td className="pl-4 pb-2 text-xs text-gray-600" colSpan={3}>
+                          <span className="font-medium">▹ Adicionais:</span> {item.extras_info}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-black">
-                  <td colSpan={2} className="text-right font-bold">TOTAL:</td>
-                  <td className="text-right font-bold">{formatCurrency(selectedOrderToPrint.total)}</td>
+                <tr className="bg-gray-100 font-bold">
+                  <td colSpan={2} className="p-2 text-right">SUBTOTAL:</td>
+                  <td className="p-2 text-right">{formatCurrency(selectedOrderToPrint.total)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
           
+          {/* Observações (se existirem) */}
           {selectedOrderToPrint.observations && (
-            <div className="mb-4 border p-2">
-              <p className="font-bold">OBSERVAÇÕES:</p>
-              <p>{selectedOrderToPrint.observations}</p>
+            <div className="mb-4 border border-gray-300 rounded-lg p-3 bg-gray-50">
+              <p className="font-bold border-b border-gray-300 pb-1 mb-2">OBSERVAÇÕES:</p>
+              <p className="italic">{selectedOrderToPrint.observations}</p>
             </div>
           )}
           
-          <div className="text-center text-xs mt-8 pt-2 border-t">
-            <p>Impresso em: {new Date().toLocaleString('pt-BR')}</p>
+          {/* Rodapé */}
+          <div className="text-center text-xs mt-6 pt-3 border-t border-dotted border-gray-400">
+            <p>COMANDA PARA USO INTERNO - COZINHA</p>
+            <p className="mt-1">Impresso em: {new Date().toLocaleString('pt-BR')}</p>
           </div>
         </div>
       )}

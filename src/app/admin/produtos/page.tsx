@@ -30,6 +30,7 @@ type Category = Database['public']['Tables']['categories']['Row']
 
 interface ProductWithCategory extends Product {
   category_name: string
+  display_price?: number
 }
 
 export default function ProductsPage() {
@@ -85,10 +86,29 @@ export default function ProductsPage() {
       if (error) throw error
       
       if (data) {
-        // Adicionar o nome da categoria a cada produto
-        const productsWithCategory = data.map((product: Product) => ({
-          ...product,
-          category_name: categoryMap.get(product.category_id) || 'Categoria Desconhecida'
+        // Para cada produto com variações, buscar o preço mínimo das variações
+        const productsWithCategory = await Promise.all(data.map(async (product: Product) => {
+          let displayPrice = product.price
+          
+          // Se o produto tem variações, buscar o preço mínimo
+          if (product.has_variations) {
+            const { data: variations, error: variationsError } = await supabase
+              .from('product_variations')
+              .select('price')
+              .eq('product_id', product.id)
+              .order('price')
+            
+            if (!variationsError && variations && variations.length > 0) {
+              // Atualizar o preço de exibição com o preço da variação mais barata
+              displayPrice = variations[0].price
+            }
+          }
+          
+          return {
+            ...product,
+            display_price: displayPrice,
+            category_name: categoryMap.get(product.category_id) || 'Categoria Desconhecida'
+          }
         }))
         
         setProducts(productsWithCategory)
@@ -199,7 +219,14 @@ export default function ProductsPage() {
                       {product.category_name}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap font-medium">
-                      {formatCurrency(product.price)}
+                      {product.has_variations ? (
+                        <span className="flex flex-col">
+                          <span className="text-xs text-gray-500">A partir de</span>
+                          {formatCurrency(product.display_price || product.price)}
+                        </span>
+                      ) : (
+                        formatCurrency(product.price)
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <Link

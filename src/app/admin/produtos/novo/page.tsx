@@ -10,6 +10,20 @@ import toast from 'react-hot-toast'
 
 type Category = Database['public']['Tables']['categories']['Row']
 
+type ProductVariation = {
+  id?: string
+  name: string
+  price: string
+  order_index: number
+}
+
+type ProductExtra = {
+  id?: string
+  name: string
+  price: string
+  order_index: number
+}
+
 export default function NewProductPage() {
   const router = useRouter()
   const [categories, setCategories] = useState<Category[]>([])
@@ -21,6 +35,12 @@ export default function NewProductPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  
+  // Estados para controlar variações e adicionais
+  const [hasVariations, setHasVariations] = useState(false)
+  const [hasExtras, setHasExtras] = useState(false)
+  const [variations, setVariations] = useState<ProductVariation[]>([])
+  const [extras, setExtras] = useState<ProductExtra[]>([])
   
   useEffect(() => {
     const fetchCategories = async () => {
@@ -68,6 +88,80 @@ export default function NewProductPage() {
     setPrice(value)
   }
   
+  // Funções para gerenciar variações
+  const addVariation = () => {
+    setVariations([
+      ...variations,
+      {
+        name: '',
+        price: '',
+        order_index: variations.length
+      }
+    ])
+  }
+  
+  const updateVariation = (index: number, field: keyof ProductVariation, value: string) => {
+    const updatedVariations = [...variations]
+    
+    if (field === 'price') {
+      // Permitir apenas números e ponto para preços
+      value = value.replace(/[^0-9.]/g, '')
+    }
+    
+    updatedVariations[index] = {
+      ...updatedVariations[index],
+      [field]: value
+    }
+    
+    setVariations(updatedVariations)
+  }
+  
+  const removeVariation = (index: number) => {
+    const updatedVariations = variations.filter((_, i) => i !== index)
+    // Atualizar os índices de ordenação
+    updatedVariations.forEach((variation, idx) => {
+      variation.order_index = idx
+    })
+    setVariations(updatedVariations)
+  }
+  
+  // Funções para gerenciar adicionais
+  const addExtra = () => {
+    setExtras([
+      ...extras,
+      {
+        name: '',
+        price: '',
+        order_index: extras.length
+      }
+    ])
+  }
+  
+  const updateExtra = (index: number, field: keyof ProductExtra, value: string) => {
+    const updatedExtras = [...extras]
+    
+    if (field === 'price') {
+      // Permitir apenas números e ponto para preços
+      value = value.replace(/[^0-9.]/g, '')
+    }
+    
+    updatedExtras[index] = {
+      ...updatedExtras[index],
+      [field]: value
+    }
+    
+    setExtras(updatedExtras)
+  }
+  
+  const removeExtra = (index: number) => {
+    const updatedExtras = extras.filter((_, i) => i !== index)
+    // Atualizar os índices de ordenação
+    updatedExtras.forEach((extra, idx) => {
+      extra.order_index = idx
+    })
+    setExtras(updatedExtras)
+  }
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -75,12 +169,42 @@ export default function NewProductPage() {
       return toast.error('O nome do produto é obrigatório')
     }
     
-    if (!price || isNaN(parseFloat(price)) || parseFloat(price) <= 0) {
+    if (!hasVariations && (!price || isNaN(parseFloat(price)) || parseFloat(price) <= 0)) {
       return toast.error('O preço deve ser um valor válido maior que zero')
     }
     
     if (!categoryId) {
       return toast.error('Selecione uma categoria')
+    }
+    
+    // Validar variações se estiverem habilitadas
+    if (hasVariations && variations.length === 0) {
+      return toast.error('Adicione pelo menos uma variação para o produto')
+    }
+    
+    if (hasVariations) {
+      for (let i = 0; i < variations.length; i++) {
+        const variation = variations[i]
+        if (!variation.name.trim()) {
+          return toast.error(`Informe o nome da variação ${i+1}`)
+        }
+        if (!variation.price || isNaN(parseFloat(variation.price)) || parseFloat(variation.price) <= 0) {
+          return toast.error(`Informe um preço válido para a variação ${variation.name}`)
+        }
+      }
+    }
+    
+    // Validar adicionais se estiverem habilitados
+    if (hasExtras && extras.length > 0) {
+      for (let i = 0; i < extras.length; i++) {
+        const extra = extras[i]
+        if (!extra.name.trim()) {
+          return toast.error(`Informe o nome do adicional ${i+1}`)
+        }
+        if (!extra.price || isNaN(parseFloat(extra.price)) || parseFloat(extra.price) <= 0) {
+          return toast.error(`Informe um preço válido para o adicional ${extra.name}`)
+        }
+      }
     }
     
     try {
@@ -94,18 +218,59 @@ export default function NewProductPage() {
       }
       
       // Inserir o produto com a URL da imagem no Supabase Storage
-      const { error } = await supabase
+      const { data: productData, error } = await supabase
         .from('products')
         .insert({
           name,
           description: description || null,
-          price: parseFloat(price),
+          price: hasVariations ? 0 : parseFloat(price), // Se tiver variações, o preço base pode ser zero
           image_url: imageUrl,
           category_id: categoryId,
           created_at: new Date().toISOString(),
+          has_variations: hasVariations,
+          has_extras: hasExtras
         })
+        .select('id') // Retornar o ID do produto inserido
       
       if (error) throw error
+      
+      if (!productData || productData.length === 0) {
+        throw new Error('Erro ao criar produto: ID do produto não retornado')
+      }
+      
+      const productId = productData[0].id
+      
+      // Inserir variações se habilitadas
+      if (hasVariations && variations.length > 0) {
+        const variationsToInsert = variations.map(variation => ({
+          product_id: productId,
+          name: variation.name,
+          price: parseFloat(variation.price),
+          order_index: variation.order_index
+        }))
+        
+        const { error: variationError } = await supabase
+          .from('product_variations')
+          .insert(variationsToInsert)
+        
+        if (variationError) throw variationError
+      }
+      
+      // Inserir adicionais se habilitados
+      if (hasExtras && extras.length > 0) {
+        const extrasToInsert = extras.map(extra => ({
+          product_id: productId,
+          name: extra.name,
+          price: parseFloat(extra.price),
+          order_index: extra.order_index
+        }))
+        
+        const { error: extraError } = await supabase
+          .from('product_extras')
+          .insert(extrasToInsert)
+        
+        if (extraError) throw extraError
+      }
       
       toast.success('Produto criado com sucesso!')
       router.push('/admin/produtos')
@@ -217,6 +382,174 @@ export default function NewProductPage() {
                   </p>
                 )}
               </div>
+            </div>
+
+            {/* Seção de Variações (tamanhos, sabores, etc) */}
+            <div className="border rounded-lg p-4 bg-gray-50">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="hasVariations"
+                    checked={hasVariations}
+                    onChange={(e) => setHasVariations(e.target.checked)}
+                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                  />
+                  <label htmlFor="hasVariations" className="ml-2 block text-sm font-medium text-gray-700">
+                    Este produto possui variações (tamanhos, sabores, etc)
+                  </label>
+                </div>
+                {hasVariations && (
+                  <button
+                    type="button"
+                    onClick={addVariation}
+                    className="px-3 py-1 bg-primary text-white text-sm rounded hover:bg-primary-dark transition-colors flex items-center space-x-1"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span>Adicionar Variação</span>
+                  </button>
+                )}
+              </div>
+
+              {hasVariations && (
+                <div className="space-y-3">
+                  {variations.length === 0 ? (
+                    <div className="text-gray-500 text-sm italic">
+                      Nenhuma variação adicionada. Clique em "Adicionar Variação" para criar uma.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {variations.map((variation, index) => (
+                        <div key={index} className="flex items-center space-x-3 bg-white p-3 rounded border">
+                          <div className="flex-grow">
+                            <input
+                              type="text"
+                              value={variation.name}
+                              onChange={(e) => updateVariation(index, 'name', e.target.value)}
+                              placeholder="Nome da variação (ex: Pequeno, Médio, etc)"
+                              className="input py-1 mb-1 w-full"
+                            />
+                          </div>
+                          <div className="w-28">
+                            <input
+                              type="text"
+                              value={variation.price}
+                              onChange={(e) => updateVariation(index, 'price', e.target.value)}
+                              placeholder="Preço"
+                              className="input py-1 mb-1 w-full"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeVariation(index)}
+                            className="p-1 text-red-500 hover:text-red-700 transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 6h18" />
+                              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                              <line x1="10" y1="11" x2="10" y2="17" />
+                              <line x1="14" y1="11" x2="14" y2="17" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {hasVariations && (
+                <div className="mt-2 text-sm text-gray-500">
+                  Se este produto possui variações, o cliente deverá escolher uma opção ao fazer o pedido.
+                </div>
+              )}
+            </div>
+
+            {/* Seção de Adicionais */}
+            <div className="border rounded-lg p-4 bg-gray-50">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="hasExtras"
+                    checked={hasExtras}
+                    onChange={(e) => setHasExtras(e.target.checked)}
+                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                  />
+                  <label htmlFor="hasExtras" className="ml-2 block text-sm font-medium text-gray-700">
+                    Este produto possui adicionais opcionais
+                  </label>
+                </div>
+                {hasExtras && (
+                  <button
+                    type="button"
+                    onClick={addExtra}
+                    className="px-3 py-1 bg-primary text-white text-sm rounded hover:bg-primary-dark transition-colors flex items-center space-x-1"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span>Adicionar Item</span>
+                  </button>
+                )}
+              </div>
+
+              {hasExtras && (
+                <div className="space-y-3">
+                  {extras.length === 0 ? (
+                    <div className="text-gray-500 text-sm italic">
+                      Nenhum adicional cadastrado. Clique em "Adicionar Item" para criar um.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {extras.map((extra, index) => (
+                        <div key={index} className="flex items-center space-x-3 bg-white p-3 rounded border">
+                          <div className="flex-grow">
+                            <input
+                              type="text"
+                              value={extra.name}
+                              onChange={(e) => updateExtra(index, 'name', e.target.value)}
+                              placeholder="Nome do adicional (ex: Bacon, Queijo Extra)"
+                              className="input py-1 mb-1 w-full"
+                            />
+                          </div>
+                          <div className="w-28">
+                            <input
+                              type="text"
+                              value={extra.price}
+                              onChange={(e) => updateExtra(index, 'price', e.target.value)}
+                              placeholder="Preço"
+                              className="input py-1 mb-1 w-full"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeExtra(index)}
+                            className="p-1 text-red-500 hover:text-red-700 transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 6h18" />
+                              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                              <line x1="10" y1="11" x2="10" y2="17" />
+                              <line x1="14" y1="11" x2="14" y2="17" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {hasExtras && (
+                <div className="mt-2 text-sm text-gray-500">
+                  Os adicionais são opcionais e o cliente pode selecionar vários ao fazer o pedido.
+                </div>
+              )}
             </div>
             
             <div>

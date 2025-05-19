@@ -207,7 +207,18 @@ export default function CartPage() {
       // Itens do pedido
       message += `*ITENS DO PEDIDO:*\n`
       items.forEach(item => {
+        // Adiciona o item base
         message += `• ${item.quantity}x ${item.name} - ${formatCurrency(item.price * item.quantity)}\n`
+        
+        // Adiciona detalhes da variação se existir
+        if (item.variation) {
+          message += `   ↳ Variação: ${item.variation.name}\n`
+        }
+        
+        // Adiciona detalhes dos adicionais se existirem
+        if (item.extras && item.extras.length > 0) {
+          message += `   ↳ Adicionais: ${item.extras.map(extra => extra.name).join(', ')}\n`
+        }
       })
       
       // Total e método de pagamento
@@ -316,7 +327,18 @@ export default function CartPage() {
                             
                             <div className="flex-1">
                               <h3 className="font-medium text-gray-800">{item.name}</h3>
-                              <p className="text-primary font-medium">{formatCurrency(item.price)}</p>
+                              {item.variation && (
+                                <div className="text-sm text-gray-600 mt-1">
+                                  <span className="font-medium">Variação:</span> {item.variation.name}
+                                </div>
+                              )}
+                              
+                              {item.extras && item.extras.length > 0 && (
+                                <div className="text-sm text-gray-600 mt-1">
+                                  <span className="font-medium">Adicionais:</span> {item.extras.map(extra => extra.name).join(', ')}
+                                </div>
+                              )}
+                              <p className="text-primary font-medium mt-1">{formatCurrency(item.price)}</p>
                             </div>
                             
                             <div className="flex items-center gap-2">
