@@ -241,13 +241,24 @@ export default function CartPage() {
       // 4. Limpar o carrinho
       clearCart()
       
-      // 5. Abrir WhatsApp em uma nova aba
-      window.open(whatsappUrl, '_blank')
+      // 5. Detectar se é dispositivo móvel
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
       
-      // 6. Redirecionar para a página inicial com delay para feedback visual
-      setTimeout(() => {
-        router.push('/order-success?id=' + result.orderId)
-      }, 2000)
+      if (isMobile) {
+        // Em dispositivos móveis, redirecionar diretamente para o app do WhatsApp
+        window.location.href = whatsappUrl
+        
+        // Armazenar o ID do pedido no localStorage para recuperar após retorno do WhatsApp
+        localStorage.setItem('lastOrderId', result.orderId)
+      } else {
+        // Em desktops, abrir em nova aba e redirecionar na mesma aba
+        window.open(whatsappUrl, '_blank')
+        
+        // Redirecionar para a página de sucesso com delay para feedback visual
+        setTimeout(() => {
+          router.push('/order-success?id=' + result.orderId)
+        }, 2000)
+      }
       
     } catch (error) {
       console.error('Erro ao processar pedido:', error)

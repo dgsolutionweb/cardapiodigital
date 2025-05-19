@@ -7,8 +7,21 @@ import { useRouter, useSearchParams } from 'next/navigation'
 export default function OrderSuccessPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const orderId = searchParams.get('id')
+  const [orderId, setOrderId] = useState<string | null>(searchParams.get('id'))
   const [countdown, setCountdown] = useState(5)
+  
+  // Verificar localStorage para recuperar orderId (para dispositivos móveis que retornam do WhatsApp)
+  useEffect(() => {
+    // Caso o orderId não esteja na URL, tenta recuperar do localStorage
+    if (!orderId && typeof window !== 'undefined') {
+      const savedOrderId = localStorage.getItem('lastOrderId')
+      if (savedOrderId) {
+        setOrderId(savedOrderId)
+        // Limpa após recuperar
+        localStorage.removeItem('lastOrderId')
+      }
+    }
+  }, [orderId])
   
   // Redirecionamento automático após contagem regressiva
   useEffect(() => {
