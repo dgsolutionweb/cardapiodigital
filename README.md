@@ -1,36 +1,135 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cardápio Digital
 
-## Getting Started
+Um aplicativo de cardápio digital completo com painel administrativo desenvolvido com Next.js, Supabase e TypeScript.
 
-First, run the development server:
+## Funcionalidades
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Painel de Administração
+- Autenticação via Supabase Auth
+- Gerenciamento completo de categorias (CRUD)
+- Gerenciamento completo de produtos (CRUD)
+- Visualização e gerenciamento de pedidos
+- Configuração de WhatsApp para checkout
+
+### Cardápio Público
+- Exibição responsiva de categorias e produtos
+- Filtragem por categorias
+- Carrinho de compras
+- Checkout via WhatsApp
+
+## Tecnologias Utilizadas
+
+- **Frontend**: Next.js 14 com App Router
+- **Backend**: Supabase (Autenticação, Banco de Dados, Storage)
+- **Estilização**: TailwindCSS
+- **Gerenciamento de Estado**: Zustand
+- **Validação**: Zod
+- **Notificações**: React Hot Toast
+
+## Estrutura do Projeto
+
+```
+cardapio-digital/
+├── public/               # Arquivos estáticos
+├── src/
+│   ├── app/              # App Router do Next.js
+│   │   ├── admin/        # Rotas do painel administrativo
+│   │   │   ├── categorias/  # CRUD de categorias
+│   │   │   ├── produtos/    # CRUD de produtos
+│   │   │   ├── pedidos/     # Gerenciamento de pedidos
+│   │   │   └── configuracoes/ # Configurações
+│   │   └── ...           # Páginas públicas do cardápio
+│   ├── components/       # Componentes React
+│   │   ├── cart/         # Componentes do carrinho
+│   │   ├── category/     # Componentes de categoria
+│   │   ├── product/      # Componentes de produto
+│   │   └── ui/           # Componentes de UI compartilhados
+│   ├── lib/              # Funções e utilitários
+│   │   ├── supabase.ts   # Cliente Supabase
+│   │   └── utils.ts      # Funções utilitárias
+│   ├── store/            # Estado global (Zustand)
+│   └── types/            # Tipos TypeScript
+├── supabase/             # Configuração do Supabase
+│   └── migrations/       # Migrações SQL
+├── .env.local            # Variáveis de ambiente
+└── ...                   # Arquivos de configuração
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Começando
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Pré-requisitos
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Node.js 18+ instalado
+- Uma conta no Supabase (https://supabase.com)
 
-## Learn More
+### Instalação
 
-To learn more about Next.js, take a look at the following resources:
+1. Clone o repositório:
+```bash
+git clone [url-do-repositorio]
+cd cardapio-digital
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. Instale as dependências:
+```bash
+npm install
+# ou
+yarn install
+# ou
+pnpm install
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. Configure as variáveis de ambiente: (já configurado)
+```
+# .env.local
+NEXT_PUBLIC_SUPABASE_URL=https://tcbketwbrlawpbktasva.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+NEXT_PUBLIC_SUPABASE_PROJECT_ID=tcbketwbrlawpbktasva
+NEXT_PUBLIC_WHATSAPP_NUMBER=5511999999999
+```
 
-## Deploy on Vercel
+4. Execute o projeto em modo de desenvolvimento:
+```bash
+npm run dev
+# ou
+yarn dev
+# ou
+pnpm dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+5. Acesse o aplicativo em [http://localhost:3000](http://localhost:3000)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Banco de Dados
+
+O projeto utiliza o Supabase como banco de dados PostgreSQL. A estrutura de banco de dados é composta por:
+
+- `categories`: Categorias dos produtos
+- `products`: Produtos do cardápio
+- `orders`: Pedidos realizados pelos clientes
+- `order_items`: Itens de cada pedido
+- `settings`: Configurações do sistema
+
+A migração inicial já foi aplicada no seu projeto Supabase com ID: `tcbketwbrlawpbktasva`.
+
+## Painel de Administração
+
+O painel de administração está disponível em [http://localhost:3000/admin](http://localhost:3000/admin).
+
+Para criar um usuário administrador, você pode usar a interface de autenticação do Supabase:
+
+1. Acesse seu projeto no Supabase
+2. Vá para Authentication > Users
+3. Clique em "Add User" e crie um usuário com email e senha
+4. Use essas credenciais para acessar o painel de administração
+
+## Deploy
+
+Para fazer o deploy do projeto, você pode usar a Vercel:
+
+```bash
+vercel
+```
+
+## Licença
+
+Este projeto está licenciado sob a licença MIT.
