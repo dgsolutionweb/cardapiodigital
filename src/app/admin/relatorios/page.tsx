@@ -16,6 +16,17 @@ type Filter = {
   category: string
 }
 
+type Order = {
+  id: string
+  customer_name: string
+  customer_phone: string
+  total: number
+  status: string
+  payment_method?: string
+  created_at: string
+  updated_at: string | null
+}
+
 type OrderStats = {
   totalOrders: number
   totalRevenue: number
@@ -26,6 +37,17 @@ type OrderStats = {
   ordersByPaymentMethod: {
     [key: string]: number
   }
+}
+
+type OrderItem = {
+  id: string
+  order_id: string
+  products: {
+    id: string
+    name: string
+  }
+  quantity: number
+  unit_price: number
 }
 
 type ProductSales = {
@@ -124,8 +146,11 @@ export default function ReportsPage() {
     
     if (error) throw error
     
+    // Tratar dados para garantir que correspondam ao tipo Order
+    const orders = data as Order[]
+    
     // Calcular estatísticas
-    const total = data?.reduce((sum, order) => {
+    const total = orders?.reduce((sum, order) => {
       const orderTotal = typeof order.total === 'string' 
         ? parseFloat(order.total) 
         : (order.total || 0)
@@ -134,18 +159,18 @@ export default function ReportsPage() {
     
     const avg = count && count > 0 ? total / count : 0
     
-    const pending = data?.filter(order => 
+    const pending = orders?.filter(order => 
       ['pendente', 'confirmado', 'em_preparo', 'a_caminho'].includes(order.status)
     ).length || 0
     
-    const completed = data?.filter(order => order.status === 'entregue').length || 0
-    const canceled = data?.filter(order => order.status === 'cancelado').length || 0
+    const completed = orders?.filter(order => order.status === 'entregue').length || 0
+    const canceled = orders?.filter(order => order.status === 'cancelado').length || 0
     
     // Estatísticas por método de pagamento
     const paymentMethods = {
-      pix: data?.filter(order => order.payment_method === 'pix').length || 0,
-      cartao: data?.filter(order => order.payment_method === 'cartao').length || 0,
-      dinheiro: data?.filter(order => order.payment_method === 'dinheiro').length || 0
+      pix: orders?.filter(order => order.payment_method === 'pix').length || 0,
+      cartao: orders?.filter(order => order.payment_method === 'cartao').length || 0,
+      dinheiro: orders?.filter(order => order.payment_method === 'dinheiro').length || 0
     }
     
     setOrderStats({
@@ -184,16 +209,15 @@ export default function ReportsPage() {
       return
     }
     
-    // Buscar itens de pedidos
+    // Buscar itens de pedidos com seus produtos relacionados
     let itemsQuery = supabase
       .from('order_items')
       .select(`
         id,
-        product_id,
-        product_name,
         quantity,
         unit_price,
-        order_id
+        order_id,
+        products (id, name)
       `)
       .in('order_id', orderIds.map(o => o.id))
     
@@ -206,8 +230,11 @@ export default function ReportsPage() {
       return
     }
     
+    // Converter items para o tipo OrderItem
+    const orderItems = items as OrderItem[]
+    
     // Filtrar por categoria (se especificada)
-    let filteredItems = items
+    let filteredItems = orderItems
     
     if (filters.category !== 'all') {
       // Buscar produtos da categoria
@@ -218,7 +245,7 @@ export default function ReportsPage() {
       
       if (!categoryError && categoryProducts && categoryProducts.length > 0) {
         const categoryProductIds = categoryProducts.map(p => p.id)
-        filteredItems = items.filter(item => categoryProductIds.includes(item.product_id))
+        filteredItems = orderItems.filter(item => categoryProductIds.includes(item.products.id))
       }
     }
     
@@ -226,8 +253,8 @@ export default function ReportsPage() {
     const productSales: { [key: string]: ProductSales } = {}
     
     filteredItems.forEach(item => {
-      const productId = item.product_id
-      const productName = item.product_name
+      const productId = item.products.id
+      const productName = item.products.name
       const quantity = item.quantity || 0
       const unitPrice = typeof item.unit_price === 'string' 
         ? parseFloat(item.unit_price) 
