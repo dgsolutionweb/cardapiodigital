@@ -211,13 +211,15 @@ export default function CartPage() {
         message += `• ${item.quantity}x ${item.name} - ${formatCurrency(item.price * item.quantity)}\n`
         
         // Adiciona detalhes da variação se existir
-        if (item.variation) {
-          message += `   ↳ Variação: ${item.variation.name}\n`
+        const variationName = item.variation_name || (item.variation?.name || null);
+        if (variationName) {
+          message += `   ↓ Variação: ${variationName}\n`
         }
         
         // Adiciona detalhes dos adicionais se existirem
-        if (item.extras && item.extras.length > 0) {
-          message += `   ↳ Adicionais: ${item.extras.map(extra => extra.name).join(', ')}\n`
+        const extrasInfo = item.extras_info || (item.extras && item.extras.length > 0 ? item.extras.map(extra => extra.name).join(', ') : null);
+        if (extrasInfo) {
+          message += `   ↓ Adicionais: ${extrasInfo}\n`
         }
       })
       
@@ -327,15 +329,15 @@ export default function CartPage() {
                             
                             <div className="flex-1">
                               <h3 className="font-medium text-gray-800">{item.name}</h3>
-                              {item.variation && (
+                              {(item.variation_name || (item.variation && item.variation.name)) && (
                                 <div className="text-sm text-gray-600 mt-1">
-                                  <span className="font-medium">Variação:</span> {item.variation.name}
+                                  <span className="font-medium">Variação:</span> {item.variation_name || item.variation?.name}
                                 </div>
                               )}
                               
-                              {item.extras && item.extras.length > 0 && (
+                              {(item.extras_info || (item.extras && item.extras.length > 0)) && (
                                 <div className="text-sm text-gray-600 mt-1">
-                                  <span className="font-medium">Adicionais:</span> {item.extras.map(extra => extra.name).join(', ')}
+                                  <span className="font-medium">Adicionais:</span> {item.extras_info || item.extras?.map(extra => extra.name).join(', ')}
                                 </div>
                               )}
                               <p className="text-primary font-medium mt-1">{formatCurrency(item.price)}</p>
@@ -454,12 +456,30 @@ export default function CartPage() {
                 
                 <ul className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
                   {items.map((item) => (
-                    <li key={item.id} className="p-3 flex items-center justify-between">
-                      <div className="flex items-center">
-                        <span className="font-medium text-gray-800 mr-2">{item.quantity}x</span>
-                        <span>{item.name}</span>
+                    <li key={item.id} className="p-3 flex justify-between">
+                      <div>
+                        <div className="flex items-center">
+                          <span className="font-medium text-gray-800 mr-2">{item.quantity}x</span>
+                          <span className="font-medium">{item.name}</span>
+                        </div>
+                        
+                        {/* Mostrar variação se existir */}
+                        {(item.variation_name || (item.variation && item.variation.name)) && (
+                          <div className="text-xs text-gray-600 ml-6 mt-1">
+                            <span>Variação: </span>
+                            <span>{item.variation_name || item.variation?.name}</span>
+                          </div>
+                        )}
+                        
+                        {/* Mostrar adicionais se existirem */}
+                        {(item.extras_info || (item.extras && item.extras.length > 0)) && (
+                          <div className="text-xs text-gray-600 ml-6 mt-0.5">
+                            <span>Adicionais: </span>
+                            <span>{item.extras_info || item.extras?.map(extra => extra.name).join(', ')}</span>
+                          </div>
+                        )}
                       </div>
-                      <span className="text-gray-700">{formatCurrency(item.price * item.quantity)}</span>
+                      <span className="text-gray-700 self-start">{formatCurrency(item.price * item.quantity)}</span>
                     </li>
                   ))}
                 </ul>

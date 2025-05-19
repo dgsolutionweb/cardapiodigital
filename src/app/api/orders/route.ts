@@ -49,23 +49,26 @@ export async function POST(request: Request) {
     // Inserir os itens do pedido
     const orderItems = items.map((item: any) => {
       // Preparar informações de variação e adicionais
-      let variationName = null;
-      let extrasInfo = null;
+      let variationName = item.variation_name || null;
+      let extrasInfo = item.extras_info || null;
       
-      // Se o item tem uma variação selecionada
-      if (item.variation) {
+      // Se o item tem uma variação selecionada na estrutura antiga
+      if (item.variation && !variationName) {
         variationName = item.variation.name;
       }
       
-      // Se o item tem adicionais selecionados
-      if (item.extras && item.extras.length > 0) {
+      // Se o item tem adicionais selecionados na estrutura antiga
+      if (item.extras && item.extras.length > 0 && !extrasInfo) {
         extrasInfo = item.extras.map((extra: any) => extra.name).join(', ');
       }
+      
+      // Usar product_id se existir, caso contrário usar id
+      const productId = item.product_id || item.id;
       
       return {
         id: crypto.randomUUID(),
         order_id: orderId,
-        product_id: item.id,
+        product_id: productId,
         product_name: item.name,
         quantity: item.quantity,
         unit_price: item.price,
