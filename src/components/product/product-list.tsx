@@ -46,6 +46,7 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
   const [selectedExtras, setSelectedExtras] = useState<ProductExtra[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [loadingVariations, setLoadingVariations] = useState(false)
+  const [quantity, setQuantity] = useState(1)
   const { addItem } = useCartStore()
   
   useEffect(() => {
@@ -344,8 +345,8 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
 
       {/* Modal para seleção de variações e adicionais */}
       {modalOpen && selectedProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 animate-fadeIn">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col animate-slideUp">
             {/* Header do modal */}
             <div className="p-4 border-b flex items-center justify-between">
               <h3 className="font-bold text-lg">{selectedProduct?.name}</h3>
@@ -358,6 +359,17 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
                 </svg>
               </button>
             </div>
+            
+            {/* Imagem do produto (se existir) */}
+            {selectedProduct?.image_url && (
+              <div className="w-full h-48 relative overflow-hidden">
+                <img
+                  src={getImageUrl(selectedProduct.image_url)}
+                  alt={selectedProduct.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
 
             {/* Conteúdo do modal com scroll */}
             <div className="flex-1 overflow-y-auto p-4">
@@ -367,6 +379,55 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
                 </div>
               ) : (
                 <div className="space-y-6">
+                  {/* Preço e descrição para produtos sem variações */}
+                  {(!selectedProduct.has_variations || productVariations.length === 0) && (
+                    <div className="mb-6 flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-2xl text-primary mb-1">
+                          {formatCurrency(selectedProduct.price)}
+                        </div>
+                        {selectedProduct.description && (
+                          <div className="text-sm text-gray-500 line-clamp-1">
+                            {truncateText(selectedProduct.description, 40)}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        <div className="text-lg font-medium">Quantidade</div>
+                        <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (quantity > 1) setQuantity(quantity - 1);
+                            }}
+                            className="px-3 py-1 bg-gray-100 hover:bg-gray-200 transition-colors"
+                          >
+                            -
+                          </button>
+                          <div className="px-3 py-1 min-w-[30px] text-center">{quantity}</div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setQuantity(quantity + 1);
+                            }}
+                            className="px-3 py-1 bg-gray-100 hover:bg-gray-200 transition-colors"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Descrição do produto */}
+                  {selectedProduct.description && (
+                    <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                      <h4 className="font-medium text-gray-700 mb-1">Descrição</h4>
+                      <p className="text-gray-600">{selectedProduct.description}</p>
+                    </div>
+                  )}
+                  
                   {/* Seção de variações */}
                   {selectedProduct?.has_variations && productVariations.length > 0 && (
                     <div>
@@ -423,18 +484,24 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
             {/* Total e botão de adicionar */}
             <div className="p-4 border-t">
               <div className="flex justify-between items-center mb-4">
-                <span className="font-medium">Total:</span>
-                <span className="font-bold text-lg text-primary">
+                <span className="font-medium text-lg">Total:</span>
+                <span className="font-bold text-2xl text-primary">
                   {formatCurrency(
-                    (selectedVariation ? selectedVariation.price : selectedProduct?.price || 0) + 
-                    selectedExtras.reduce((total, extra) => total + extra.price, 0)
+                    quantity * (
+                      (selectedVariation ? selectedVariation.price : selectedProduct?.price || 0) + 
+                      selectedExtras.reduce((total, extra) => total + extra.price, 0)
+                    )
                   )}
                 </span>
               </div>
               <button 
                 onClick={handleAddToCart}
                 disabled={selectedProduct?.has_variations && !selectedVariation}
-                className={`w-full py-3 rounded-lg text-white font-medium ${selectedProduct?.has_variations && !selectedVariation ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary hover:bg-primary-dark transition-colors'}`}
+                className={`w-full py-4 rounded-lg text-white font-medium text-lg shadow-md ${
+                  selectedProduct?.has_variations && !selectedVariation 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-gradient-to-r from-primary to-primary-light hover:shadow-lg animate-pulse transform hover:scale-[1.02] transition-all'
+                }`}
               >
                 Adicionar ao carrinho
               </button>
