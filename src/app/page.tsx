@@ -9,62 +9,40 @@ import { CartButton } from '@/components/cart/cart-button'
 import { TrackButton } from '@/components/tracking/track-button'
 import { CategoryList } from '@/components/category/category-list'
 import { supabase } from '@/lib/supabase'
+import { useStoreStatus } from '@/hooks/useStoreStatus'
+import { getNextOpenTime, formatBusinessHours } from '@/lib/utils'
 import { toast } from 'react-hot-toast'
 
 export default function Home() {
-  const [storeOpen, setStoreOpen] = useState(true)
+  // Usar nosso hook inteligente de status da loja (com verificação automática ativada)
+  const storeStatus = useStoreStatus(true)
+  
+  // Estados para outras configurações
   const [storeName, setStoreName] = useState('Cardápio Digital')
-  const [businessHours, setBusinessHours] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   
-  // Buscar configurações da loja
+  // Buscar configurações gerais (nome, logo)
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         const { data, error } = await supabase
           .from('settings')
           .select('key, value')
-          .in('key', ['store_open', 'store_name', 'business_hours', 'logo_url'])
+          .in('key', ['store_name', 'logo_url'])
         
         if (error) throw error
         
         if (data) {
           data.forEach(setting => {
             switch(setting.key) {
-              case 'store_open':
-                setStoreOpen(setting.value === 'true')
-                break
               case 'store_name':
                 setStoreName(setting.value);
                 break;
               case 'logo_url':
                 setLogoUrl(setting.value);
                 break;
-              case 'business_hours':
-                try {
-                  const hours = JSON.parse(setting.value)
-                  // Pegar o dia da semana (0 = Domingo, 1 = Segunda, ...)
-                  const dayOfWeek = new Date().getDay()
-                  // Mapear para as chaves do nosso objeto
-                  const dayMap = {
-                    0: 'sunday',
-                    1: 'monday',
-                    2: 'tuesday',
-                    3: 'wednesday',
-                    4: 'thursday',
-                    5: 'friday',
-                    6: 'saturday'
-                  }
-                  const today = dayMap[dayOfWeek as keyof typeof dayMap]
-                  // Extrair o horário do dia atual, se disponível
-                  const todayHours = hours[today] || ''
-                  setBusinessHours(todayHours)
-                } catch (e) {
-                  console.error('Erro ao processar horários:', e)
-                }
-                break
             }
           })
         }
@@ -127,20 +105,26 @@ export default function Home() {
       </header>
       
       {/* Banner de loja fechada */}
-      {!storeOpen && (
+      {!storeStatus.isOpen && !storeStatus.loading && (
         <div className="bg-red-600 text-white py-3 px-4">
-          <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
             <div className="flex items-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <span className="font-medium">Estamos fechados no momento!</span>
+              {storeStatus.autoScheduleEnabled && (
+                <span className="ml-2 text-xs bg-white/20 px-2 py-1 rounded-full">
+                  Auto
+                </span>
+              )}
             </div>
-            <div className="text-sm">
-              {businessHours ? (
-                <span>Horário hoje: {businessHours}</span>
-              ) : (
-                <span>Volte mais tarde</span>
+            <div className="text-sm space-y-1 sm:space-y-0 sm:text-right">
+              <div>{formatBusinessHours(storeStatus.businessHours)}</div>
+              {getNextOpenTime(storeStatus.businessHours) && (
+                <div className="text-xs text-red-200">
+                  {getNextOpenTime(storeStatus.businessHours)}
+                </div>
               )}
             </div>
           </div>
@@ -208,7 +192,7 @@ export default function Home() {
               </button>
             </div>
           </div>
-          <ProductList storeOpen={storeOpen} searchTerm={searchTerm} />
+          <ProductList storeOpen={storeStatus.isOpen} searchTerm={searchTerm} />
         </section>
       </div>
       

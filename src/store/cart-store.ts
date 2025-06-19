@@ -31,37 +31,52 @@ export interface CartItem {
 
 interface CartStore {
   items: CartItem[]
+  total: number
   addItem: (item: Omit<CartItem, 'quantity'>) => void
   removeItem: (id: string) => void
   updateQuantity: (id: string, quantity: number) => void
   clearCart: () => void
-  total: number
+  calculateTotal: () => number
+}
+
+const calculateTotal = (items: CartItem[]) => {
+  return items.reduce((total, item) => total + (item.price * item.quantity), 0)
 }
 
 export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
+      total: 0,
       
       addItem: (newItem) => {
         const currentItems = get().items
         const existingItem = currentItems.find(item => item.id === newItem.id)
         
+        let newItems: CartItem[]
+        
         if (existingItem) {
-          return set({
-            items: currentItems.map(item => 
-              item.id === newItem.id 
-                ? { ...item, quantity: item.quantity + 1 }
-                : item
-            )
-          })
+          newItems = currentItems.map(item => 
+            item.id === newItem.id 
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          )
+        } else {
+          newItems = [...currentItems, { ...newItem, quantity: 1 }]
         }
         
-        set({ items: [...currentItems, { ...newItem, quantity: 1 }] })
+        set({ 
+          items: newItems,
+          total: calculateTotal(newItems)
+        })
       },
       
       removeItem: (id) => {
-        set({ items: get().items.filter(item => item.id !== id) })
+        const newItems = get().items.filter(item => item.id !== id)
+        set({ 
+          items: newItems,
+          total: calculateTotal(newItems)
+        })
       },
       
       updateQuantity: (id, quantity) => {
@@ -69,24 +84,32 @@ export const useCartStore = create<CartStore>()(
           return get().removeItem(id)
         }
         
+        const newItems = get().items.map(item => 
+          item.id === id ? { ...item, quantity } : item
+        )
+        
         set({
-          items: get().items.map(item => 
-            item.id === id ? { ...item, quantity } : item
-          )
+          items: newItems,
+          total: calculateTotal(newItems)
         })
       },
       
-      clearCart: () => set({ items: [] }),
+      clearCart: () => set({ items: [], total: 0 }),
       
-      get total() {
-        return get().items.reduce(
-          (total, item) => total + (item.price * item.quantity), 
-          0
-        )
+      calculateTotal: () => {
+        const currentTotal = calculateTotal(get().items)
+        set({ total: currentTotal })
+        return currentTotal
       }
     }),
     {
       name: 'cart-storage',
+      onRehydrateStorage: () => (state) => {
+        // Recalcular o total após hidratar do localStorage
+        if (state) {
+          state.total = calculateTotal(state.items)
+        }
+      }
     }
   )
 )

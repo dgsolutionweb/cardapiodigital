@@ -1,4 +1,4 @@
-// File: /projetos/cardapio/src/app/api/orders/[id]/items/route.ts
+// File: /projetos/cardapiodigital/src/app/api/orders/[id]/items/route.ts
 import * as entry from '../../../../../../../src/app/api/orders/[id]/items/route.js'
 import type { NextRequest } from 'next/server.js'
 

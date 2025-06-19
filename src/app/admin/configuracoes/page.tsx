@@ -3,17 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
+import { shouldStoreBeOpen, BusinessHours, getCurrentStoreStatus, getNextOpenTime } from '@/lib/utils'
 import toast from 'react-hot-toast'
-
-interface BusinessHours {
-  monday: string;
-  tuesday: string;
-  wednesday: string;
-  thursday: string;
-  friday: string;
-  saturday: string;
-  sunday: string;
-}
 
 export default function SettingsPage() {
   // Configurações básicas
@@ -25,8 +16,11 @@ export default function SettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  // Status da loja
+  // Status da loja e controle automático
   const [storeOpen, setStoreOpen] = useState(true)
+  const [autoScheduleEnabled, setAutoScheduleEnabled] = useState(false)
+  const [lastAutoUpdate, setLastAutoUpdate] = useState<Date | null>(null)
+  const [manualOverride, setManualOverride] = useState(false)
   
   // Configurações de entrega
   const [deliveryFee, setDeliveryFee] = useState('0.00')
@@ -54,6 +48,38 @@ export default function SettingsPage() {
     fetchSettings()
   }, [])
   
+  // Hook para verificação automática de horários
+  useEffect(() => {
+    if (!autoScheduleEnabled || manualOverride) return
+    
+    const checkStoreHours = () => {
+      const shouldBeOpen = shouldStoreBeOpen(businessHours)
+      
+      if (shouldBeOpen !== storeOpen) {
+        console.log(`Auto-atualizando status da loja: ${shouldBeOpen ? 'ABERTA' : 'FECHADA'}`)
+        setStoreOpen(shouldBeOpen)
+        setLastAutoUpdate(new Date())
+        
+        // Salvar no banco de dados
+        saveConfigItem('store_open', shouldBeOpen.toString())
+        
+        toast.success(
+          shouldBeOpen 
+            ? '🟢 Loja aberta automaticamente conforme horário configurado!' 
+            : '🔴 Loja fechada automaticamente conforme horário configurado!'
+        )
+      }
+    }
+    
+    // Verificar imediatamente
+    checkStoreHours()
+    
+    // Verificar a cada minuto
+    const interval = setInterval(checkStoreHours, 60 * 1000)
+    
+    return () => clearInterval(interval)
+  }, [autoScheduleEnabled, businessHours, storeOpen, manualOverride])
+  
   const fetchSettings = async () => {
     try {
       setLoading(true)
@@ -80,6 +106,12 @@ export default function SettingsPage() {
               break;
             case 'store_open':
               setStoreOpen(setting.value === 'true');
+              break;
+            case 'auto_schedule_enabled':
+              setAutoScheduleEnabled(setting.value === 'true');
+              break;
+            case 'manual_override':
+              setManualOverride(setting.value === 'true');
               break;
             case 'delivery_fee':
               setDeliveryFee(setting.value);
@@ -178,8 +210,10 @@ export default function SettingsPage() {
         saveConfigItem('address', storeAddress),
         saveConfigItem('logo_url', logoUrlToSave),
         
-        // Status da loja
+        // Status da loja e controles automáticos
         saveConfigItem('store_open', storeOpen.toString()),
+        saveConfigItem('auto_schedule_enabled', autoScheduleEnabled.toString()),
+        saveConfigItem('manual_override', manualOverride.toString()),
         
         // Configurações de entrega
         saveConfigItem('delivery_fee', deliveryFee),
@@ -258,6 +292,44 @@ export default function SettingsPage() {
     }))
   }
   
+  // Controle manual do status da loja
+  const handleStoreToggle = () => {
+    const newStatus = !storeOpen
+    setStoreOpen(newStatus)
+    
+    if (autoScheduleEnabled) {
+      // Se está ativando manualmente contra o horário, ativar override
+      const shouldBeOpen = shouldStoreBeOpen(businessHours)
+      if (newStatus !== shouldBeOpen) {
+        setManualOverride(true)
+        toast('Override manual ativado. Para voltar ao automático, desative e reative o agendamento.', {
+          icon: '⚠️',
+          duration: 4000
+        })
+      }
+    }
+  }
+  
+  // Controle do agendamento automático
+  const handleAutoScheduleToggle = () => {
+    const newAutoSchedule = !autoScheduleEnabled
+    setAutoScheduleEnabled(newAutoSchedule)
+    
+    if (newAutoSchedule) {
+      // Ao ativar automático, remover override e verificar horário atual
+      setManualOverride(false)
+      const shouldBeOpen = shouldStoreBeOpen(businessHours)
+      setStoreOpen(shouldBeOpen)
+      toast.success('Agendamento automático ativado! Status da loja ajustado conforme horário atual.')
+    } else {
+      setManualOverride(false)
+      toast('Agendamento automático desativado. Controle agora é manual.', {
+        icon: 'ℹ️',
+        duration: 4000
+      })
+    }
+  }
+  
   // Helper para formatar input de dinheiro
   const formatCurrency = (value: string) => {
     // Remove caracteres não numéricos, exceto ponto
@@ -271,169 +343,188 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
-      <div className="p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Configurações</h1>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Configurações</h1>
+          <p className="text-gray-600 mt-1">Configure as informações do seu estabelecimento</p>
         </div>
-        
-        {loading ? (
-          <div className="flex justify-center p-12">
-            <div className="animate-spin h-8 w-8 border-4 border-primary rounded-full border-t-transparent"></div>
+      </div>
+      
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="animate-spin h-8 w-8 border-4 border-blue-600 rounded-full border-t-transparent"></div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-8 px-6" aria-label="Tabs">
+              <button
+                onClick={() => setActiveTab('general')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'general' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Geral
+              </button>
+              <button
+                onClick={() => setActiveTab('business')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'business' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Funcionamento
+              </button>
+              <button
+                onClick={() => setActiveTab('delivery')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'delivery' 
+                    ? 'border-blue-500 text-blue-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Entrega
+              </button>
+            </nav>
           </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <div className="border-b border-gray-200 mb-6">
-              <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-                <button
-                  onClick={() => setActiveTab('general')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'general' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                >
-                  Geral
-                </button>
-                <button
-                  onClick={() => setActiveTab('business')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'business' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                >
-                  Funcionamento
-                </button>
-                <button
-                  onClick={() => setActiveTab('delivery')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'delivery' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
-                >
-                  Entrega
-                </button>
-              </nav>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="space-y-8">
-              {/* Informações Gerais */}
-              {activeTab === 'general' && (
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Logo do Estabelecimento
-                    </label>
-                    
-                    <div className="flex items-start space-x-6">
-                      <div className="w-36 h-36 border-2 border-gray-300 border-dashed rounded-lg flex items-center justify-center relative overflow-hidden">
-                        {logoUrl ? (
-                          <Image 
-                            src={logoUrl} 
-                            alt="Logo" 
-                            width={144} 
-                            height={144} 
-                            className="object-contain" 
-                          />
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                      
-                      <div className="flex-1">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          ref={fileInputRef}
-                          className="hidden"
-                          onChange={handleLogoSelect}
+          
+          <form onSubmit={handleSubmit} className="p-6 space-y-8">
+            {/* Informações Gerais */}
+            {activeTab === 'general' && (
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Logo do Estabelecimento
+                  </label>
+                  
+                  <div className="flex items-start space-x-6">
+                    <div className="w-36 h-36 border-2 border-gray-300 border-dashed rounded-lg flex items-center justify-center relative overflow-hidden">
+                      {logoUrl ? (
+                        <Image 
+                          src={logoUrl} 
+                          alt="Logo" 
+                          width={144} 
+                          height={144} 
+                          className="object-contain" 
                         />
-                        
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleLogoSelect}
+                      />
+                      
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        disabled={uploadingLogo}
+                      >
+                        {uploadingLogo ? 'Carregando...' : 'Escolher Logo'}
+                      </button>
+                      
+                      <p className="text-sm text-gray-500 mt-2">
+                        Recomendado: Imagem quadrada de pelo menos 200x200 pixels em formato PNG ou JPG.
+                      </p>
+                      
+                      {logoUrl && (
                         <button
                           type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                          disabled={uploadingLogo}
+                          onClick={() => setLogoUrl('')}
+                          className="mt-2 text-sm text-red-600 hover:text-red-800"
                         >
-                          {uploadingLogo ? 'Carregando...' : 'Escolher Logo'}
+                          Remover logo
                         </button>
-                        
-                        <p className="text-sm text-gray-500 mt-2">
-                          Recomendado: Imagem quadrada de pelo menos 200x200 pixels em formato PNG ou JPG.
-                        </p>
-                        
-                        {logoUrl && (
-                          <button
-                            type="button"
-                            onClick={() => setLogoUrl('')}
-                            className="mt-2 text-sm text-red-600 hover:text-red-800"
-                          >
-                            Remover logo
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="store_name" className="block text-sm font-medium text-gray-700 mb-1">
-                      Nome do Estabelecimento
-                    </label>
-                    <input
-                      id="store_name"
-                      type="text"
-                      value={storeName}
-                      onChange={(e) => setStoreName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                      placeholder="Nome do seu estabelecimento"
-                    />
-                    <p className="text-sm text-gray-500 mt-1">
-                      Este nome será exibido no cardápio e nos pedidos.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
-                      Endereço
-                    </label>
-                    <input
-                      id="address"
-                      type="text"
-                      value={storeAddress}
-                      onChange={(e) => setStoreAddress(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                      placeholder="Rua Exemplo, 123 - Bairro, Cidade - UF"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="whatsapp" className="block text-sm font-medium text-gray-700 mb-1">
-                      Número de WhatsApp
-                    </label>
-                    <div className="flex">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500">
-                        +
-                      </span>
-                      <input
-                        id="whatsapp"
-                        type="text"
-                        value={whatsappNumber}
-                        onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, ''))}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="5511999999999"
-                      />
-                    </div>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Digite o número com código do país e DDD, sem espaços ou caracteres especiais. Exemplo: 5511999999999
-                    </p>
                   </div>
                 </div>
-              )}
-              
-              {/* Configurações de Funcionamento */}
-              {activeTab === 'business' && (
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                
+                <div>
+                  <label htmlFor="store_name" className="block text-sm font-medium text-gray-700 mb-1">
+                    Nome do Estabelecimento
+                  </label>
+                  <input
+                    id="store_name"
+                    type="text"
+                    value={storeName}
+                    onChange={(e) => setStoreName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nome do seu estabelecimento"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Este nome será exibido no cardápio e nos pedidos.
+                  </p>
+                </div>
+                
+                <div>
+                  <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
+                    Endereço
+                  </label>
+                  <input
+                    id="address"
+                    type="text"
+                    value={storeAddress}
+                    onChange={(e) => setStoreAddress(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Rua Exemplo, 123 - Bairro, Cidade - UF"
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="whatsapp" className="block text-sm font-medium text-gray-700 mb-1">
+                    Número de WhatsApp
+                  </label>
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500">
+                      +
+                    </span>
+                    <input
+                      id="whatsapp"
+                      type="text"
+                      value={whatsappNumber}
+                      onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, ''))}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="5511999999999"
+                    />
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Digite o número com código do país e DDD, sem espaços ou caracteres especiais. Exemplo: 5511999999999
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            {/* Configurações de Funcionamento */}
+            {activeTab === 'business' && (
+              <div className="space-y-6">
+                {/* Status da Loja Manual */}
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
                     <div>
                       <h3 className="font-medium text-gray-900">Status da Loja</h3>
-                      <p className="text-sm text-gray-500">{storeOpen ? 'Aberto para pedidos' : 'Fechado para pedidos'}</p>
+                      <p className="text-sm text-gray-500">
+                        {storeOpen ? 'Aberto para pedidos' : 'Fechado para pedidos'}
+                        {manualOverride && ' (Override manual ativo)'}
+                      </p>
                     </div>
                     <button 
                       type="button"  
                       className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${storeOpen ? 'bg-green-500' : 'bg-gray-300'}`}
-                      onClick={() => setStoreOpen(!storeOpen)}
+                      onClick={handleStoreToggle}
                     >
                       <span className="sr-only">Alterar status</span>
                       <span
@@ -441,157 +532,227 @@ export default function SettingsPage() {
                       />
                     </button>
                   </div>
-                  
-                  <div>
-                    <h3 className="text-base font-medium text-gray-900 mb-3">Horários de Funcionamento</h3>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <BusinessHourInput 
-                          day="Segunda-feira" 
-                          value={businessHours.monday} 
-                          onChange={(value) => handleBusinessHoursChange('monday', value)} 
-                        />
-                        <BusinessHourInput 
-                          day="Terça-feira" 
-                          value={businessHours.tuesday} 
-                          onChange={(value) => handleBusinessHoursChange('tuesday', value)} 
-                        />
-                        <BusinessHourInput 
-                          day="Quarta-feira" 
-                          value={businessHours.wednesday} 
-                          onChange={(value) => handleBusinessHoursChange('wednesday', value)} 
-                        />
-                        <BusinessHourInput 
-                          day="Quinta-feira" 
-                          value={businessHours.thursday} 
-                          onChange={(value) => handleBusinessHoursChange('thursday', value)} 
-                        />
-                        <BusinessHourInput 
-                          day="Sexta-feira" 
-                          value={businessHours.friday} 
-                          onChange={(value) => handleBusinessHoursChange('friday', value)} 
-                        />
-                        <BusinessHourInput 
-                          day="Sábado" 
-                          value={businessHours.saturday} 
-                          onChange={(value) => handleBusinessHoursChange('saturday', value)} 
-                        />
-                        <BusinessHourInput 
-                          day="Domingo" 
-                          value={businessHours.sunday} 
-                          onChange={(value) => handleBusinessHoursChange('sunday', value)} 
-                        />
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-2">
-                      Formato: HH:MM-HH:MM (24h). Exemplo: 10:00-22:00. Deixe em branco para dias fechados.
-                    </p>
-                  </div>
                 </div>
-              )}
-              
-              {/* Configurações de Entrega */}
-              {activeTab === 'delivery' && (
-                <div className="space-y-6">
-                  <div>
-                    <label htmlFor="delivery_fee" className="block text-sm font-medium text-gray-700 mb-1">
-                      Taxa de Entrega (R$)
-                    </label>
-                    <div className="flex">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500">
-                        R$
-                      </span>
-                      <input
-                        id="delivery_fee"
-                        type="text"
-                        value={deliveryFee}
-                        onChange={(e) => setDeliveryFee(formatCurrency(e.target.value))}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="0.00"
-                      />
+
+                {/* Agendamento Automático */}
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-medium text-blue-900">Agendamento Automático</h3>
+                      <p className="text-sm text-blue-700">
+                        {autoScheduleEnabled 
+                          ? 'Loja abre/fecha automaticamente conforme horários configurados' 
+                          : 'Controle manual do status da loja'
+                        }
+                      </p>
                     </div>
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="min_order_value" className="block text-sm font-medium text-gray-700 mb-1">
-                      Valor Mínimo de Pedido (R$)
-                    </label>
-                    <div className="flex">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500">
-                        R$
-                      </span>
-                      <input
-                        id="min_order_value"
-                        type="text"
-                        value={minOrderValue}
-                        onChange={(e) => setMinOrderValue(formatCurrency(e.target.value))}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                        placeholder="0.00"
+                    <button 
+                      type="button"  
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${autoScheduleEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}
+                      onClick={handleAutoScheduleToggle}
+                    >
+                      <span className="sr-only">Alterar agendamento automático</span>
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${autoScheduleEnabled ? 'translate-x-5' : 'translate-x-0'}`}
                       />
+                    </button>
+                  </div>
+                  
+                  {autoScheduleEnabled && (
+                    <div className="text-xs text-blue-600 space-y-1">
+                      <p>✅ Sistema verifica os horários a cada minuto</p>
+                      <p>✅ Status atualizado automaticamente</p>
+                      {lastAutoUpdate && (
+                        <p>📅 Última verificação: {lastAutoUpdate.toLocaleTimeString('pt-BR')}</p>
+                      )}
+                      {manualOverride && (
+                        <p className="text-orange-600 font-medium">⚠️ Override manual ativo - Para voltar ao automático, desative e reative o agendamento</p>
+                      )}
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Valor mínimo necessário para realizar um pedido. Deixe 0 para não ter valor mínimo.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="delivery_time" className="block text-sm font-medium text-gray-700 mb-1">
-                      Tempo de Entrega (minutos)
-                    </label>
-                    <input
-                      id="delivery_time"
-                      type="text"
-                      value={deliveryTime}
-                      onChange={(e) => setDeliveryTime(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                      placeholder="30-45"
-                    />
-                    <p className="text-sm text-gray-500 mt-1">
-                      Tempo estimado de entrega (ex: 30-45, 40-60).
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="delivery_radius" className="block text-sm font-medium text-gray-700 mb-1">
-                      Raio de Entrega (km)
-                    </label>
-                    <input
-                      id="delivery_radius"
-                      type="number"
-                      value={deliveryRadius}
-                      onChange={(e) => setDeliveryRadius(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                      placeholder="5"
-                      min="0"
-                      step="0.5"
-                    />
-                    <p className="text-sm text-gray-500 mt-1">
-                      Distância máxima para entrega em quilômetros.
-                    </p>
-                  </div>
-                </div>
-              )}
-              
-              <div className="pt-4 border-t border-gray-200 flex justify-end">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="bg-primary text-white px-6 py-2 rounded-md hover:bg-primary-dark transition-colors flex items-center gap-2"
-                >
-                  {saving ? (
-                    <>
-                      <span>Salvando...</span>
-                      <div className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></div>
-                    </>
-                  ) : (
-                    <span>Salvar Configurações</span>
                   )}
-                </button>
+                </div>
+
+                {/* Status Atual Baseado no Horário */}
+                <div className="bg-white rounded-lg p-4 border border-gray-200">
+                  <h3 className="font-medium text-gray-900 mb-3">Status Baseado no Horário Atual</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Horário atual:</span>
+                      <span className="font-medium">{new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Data:</span>
+                      <span className="font-medium">{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })}</span>
+                    </div>
+                    
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Status sugerido:</span>
+                      <span className={`font-bold ${shouldStoreBeOpen(businessHours) ? 'text-green-600' : 'text-red-600'}`}>
+                        {shouldStoreBeOpen(businessHours) ? '🟢 ABERTA' : '🔴 FECHADA'}
+                      </span>
+                    </div>
+                    
+                    {!shouldStoreBeOpen(businessHours) && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Próxima abertura:</span>
+                          <span className="font-medium text-blue-600">{getNextOpenTime(businessHours)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="text-base font-medium text-gray-900 mb-3">Horários de Funcionamento</h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <BusinessHourInput 
+                        day="Segunda-feira" 
+                        value={businessHours.monday} 
+                        onChange={(value) => handleBusinessHoursChange('monday', value)} 
+                      />
+                      <BusinessHourInput 
+                        day="Terça-feira" 
+                        value={businessHours.tuesday} 
+                        onChange={(value) => handleBusinessHoursChange('tuesday', value)} 
+                      />
+                      <BusinessHourInput 
+                        day="Quarta-feira" 
+                        value={businessHours.wednesday} 
+                        onChange={(value) => handleBusinessHoursChange('wednesday', value)} 
+                      />
+                      <BusinessHourInput 
+                        day="Quinta-feira" 
+                        value={businessHours.thursday} 
+                        onChange={(value) => handleBusinessHoursChange('thursday', value)} 
+                      />
+                      <BusinessHourInput 
+                        day="Sexta-feira" 
+                        value={businessHours.friday} 
+                        onChange={(value) => handleBusinessHoursChange('friday', value)} 
+                      />
+                      <BusinessHourInput 
+                        day="Sábado" 
+                        value={businessHours.saturday} 
+                        onChange={(value) => handleBusinessHoursChange('saturday', value)} 
+                      />
+                      <BusinessHourInput 
+                        day="Domingo" 
+                        value={businessHours.sunday} 
+                        onChange={(value) => handleBusinessHoursChange('sunday', value)} 
+                      />
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Formato: HH:MM-HH:MM (24h). Exemplo: 10:00-22:00. Deixe em branco para dias fechados.
+                  </p>
+                </div>
               </div>
-            </form>
-          </div>
-        )}
-      </div>
+            )}
+            
+            {/* Configurações de Entrega */}
+            {activeTab === 'delivery' && (
+              <div className="space-y-6">
+                <div>
+                  <label htmlFor="delivery_fee" className="block text-sm font-medium text-gray-700 mb-1">
+                    Taxa de Entrega (R$)
+                  </label>
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500">
+                      R$
+                    </span>
+                    <input
+                      id="delivery_fee"
+                      type="text"
+                      value={deliveryFee}
+                      onChange={(e) => setDeliveryFee(formatCurrency(e.target.value))}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label htmlFor="min_order_value" className="block text-sm font-medium text-gray-700 mb-1">
+                    Valor Mínimo de Pedido (R$)
+                  </label>
+                  <div className="flex">
+                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500">
+                      R$
+                    </span>
+                    <input
+                      id="min_order_value"
+                      type="text"
+                      value={minOrderValue}
+                      onChange={(e) => setMinOrderValue(formatCurrency(e.target.value))}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Valor mínimo necessário para realizar um pedido. Deixe 0 para não ter valor mínimo.
+                  </p>
+                </div>
+                
+                <div>
+                  <label htmlFor="delivery_time" className="block text-sm font-medium text-gray-700 mb-1">
+                    Tempo de Entrega (minutos)
+                  </label>
+                  <input
+                    id="delivery_time"
+                    type="text"
+                    value={deliveryTime}
+                    onChange={(e) => setDeliveryTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="30-45"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Tempo estimado de entrega (ex: 30-45, 40-60).
+                  </p>
+                </div>
+                
+                <div>
+                  <label htmlFor="delivery_radius" className="block text-sm font-medium text-gray-700 mb-1">
+                    Raio de Entrega (km)
+                  </label>
+                  <input
+                    id="delivery_radius"
+                    type="number"
+                    value={deliveryRadius}
+                    onChange={(e) => setDeliveryRadius(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="5"
+                    min="0"
+                    step="0.5"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Distância máxima para entrega em quilômetros.
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <div className="pt-4 border-t border-gray-200 flex justify-end">
+              <button
+                type="submit"
+                disabled={saving}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></div>
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar Configurações'
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }
@@ -607,7 +768,7 @@ function BusinessHourInput({ day, value, onChange }: { day: string, value: strin
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+        className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         placeholder="10:00-22:00"
       />
     </div>

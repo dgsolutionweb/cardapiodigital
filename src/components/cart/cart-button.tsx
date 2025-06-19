@@ -11,6 +11,9 @@ export function CartButton() {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const { items, total, removeItem, clearCart } = useCartStore()
+  
+  // Garantir que o total seja recalculado quando necessário
+  const calculatedTotal = total || items.reduce((sum, item) => sum + (item.price * item.quantity), 0)
 
   const toggleCart = () => setIsOpen(!isOpen)
   
@@ -85,7 +88,7 @@ export function CartButton() {
                 <div className="mt-4 pt-4 border-t">
                   <div className="flex justify-between font-bold mb-4">
                     <span>Total:</span>
-                    <span>{formatCurrency(total)}</span>
+                    <span>{formatCurrency(calculatedTotal)}</span>
                   </div>
                   
                   <div className="flex flex-col gap-2">

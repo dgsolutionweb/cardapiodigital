@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
-export async function POST(request: Request) {
+export const POST = async (request: Request) => {
   try {
     const { 
       customerName, 
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export const GET = async () => {
   try {
     const { data, error } = await supabase
       .from('orders')

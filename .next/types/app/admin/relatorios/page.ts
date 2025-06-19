@@ -1,4 +1,4 @@
-// File: /projetos/cardapio/src/app/admin/relatorios/page.tsx
+// File: /projetos/cardapiodigital/src/app/admin/relatorios/page.tsx
 import * as entry from '../../../../../src/app/admin/relatorios/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

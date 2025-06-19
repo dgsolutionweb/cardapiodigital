@@ -48,6 +48,7 @@ export type Database = {
           updated_at: string | null
           has_variations: boolean
           has_extras: boolean
+          active: boolean
         }
         Insert: {
           id?: string
@@ -60,6 +61,7 @@ export type Database = {
           updated_at?: string | null
           has_variations?: boolean
           has_extras?: boolean
+          active?: boolean
         }
         Update: {
           id?: string
@@ -72,6 +74,7 @@ export type Database = {
           updated_at?: string | null
           has_variations?: boolean
           has_extras?: boolean
+          active?: boolean
         }
         Relationships: [
           {
@@ -91,6 +94,9 @@ export type Database = {
           status: string
           created_at: string
           updated_at: string | null
+          delivery_address: string | null
+          payment_method: string | null
+          observations: string | null
         }
         Insert: {
           id?: string
@@ -100,6 +106,9 @@ export type Database = {
           status?: string
           created_at?: string
           updated_at?: string | null
+          delivery_address?: string | null
+          payment_method?: string | null
+          observations?: string | null
         }
         Update: {
           id?: string
@@ -109,6 +118,9 @@ export type Database = {
           status?: string
           created_at?: string
           updated_at?: string | null
+          delivery_address?: string | null
+          payment_method?: string | null
+          observations?: string | null
         }
         Relationships: []
       }

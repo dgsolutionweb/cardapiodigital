@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 
-export async function GET(
+export const GET = async (
   request: Request,
   { params }: { params: { id: string } }
-) {
+) => {
   try {
     const orderId = params.id
     

@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCartStore } from '@/store/cart-store'
 import { formatCurrency } from '@/lib/utils'
+import { useStoreStatus } from '@/hooks/useStoreStatus'
 import { toast } from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 
@@ -14,10 +15,12 @@ export default function CartPage() {
   const searchParams = useSearchParams()
   const { items, total, updateQuantity, removeItem, clearCart } = useCartStore()
   
+  // Usar nosso hook inteligente de status da loja (sem verificação automática no carrinho)
+  const storeStatus = useStoreStatus(false)
+  
   // Estados para as configurações
   const [deliveryFee, setDeliveryFee] = useState(0)
   const [minOrderValue, setMinOrderValue] = useState(0)
-  const [storeOpen, setStoreOpen] = useState(true)
   const [storeName, setStoreName] = useState('')
   const [deliveryTime, setDeliveryTime] = useState('30-45')
   const [storeAddress, setStoreAddress] = useState('')
@@ -31,6 +34,7 @@ export default function CartPage() {
         const { data, error } = await supabase
           .from('settings')
           .select('key, value')
+          .in('key', ['delivery_fee', 'min_order_value', 'store_name', 'delivery_time', 'address'])
         
         if (error) throw error
         
@@ -42,9 +46,6 @@ export default function CartPage() {
                 break
               case 'min_order_value':
                 setMinOrderValue(parseFloat(setting.value) || 0)
-                break
-              case 'store_open':
-                setStoreOpen(setting.value === 'true')
                 break
               case 'store_name':
                 setStoreName(setting.value)
@@ -126,7 +127,7 @@ export default function CartPage() {
     }
     
     // Verificar se a loja está aberta
-    if (!storeOpen) {
+    if (!storeStatus.isOpen) {
       toast.error('A loja está fechada no momento. Verifique os horários de funcionamento.')
       return
     }

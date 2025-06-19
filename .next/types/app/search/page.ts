@@ -1,4 +1,4 @@
-// File: /projetos/cardapio/src/app/search/page.tsx
+// File: /projetos/cardapiodigital/src/app/search/page.tsx
 import * as entry from '../../../../src/app/search/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

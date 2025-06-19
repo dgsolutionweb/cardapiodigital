@@ -225,7 +225,7 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
       product_id: selectedProduct.id,
       name: selectedProduct.name,
       price: basePrice + extrasPrice,
-      image_url: selectedProduct.image_url || undefined,
+      imageUrl: selectedProduct.image_url || undefined,
       variation_name: variationName,
       extras_info: extrasInfo,
       // Para recuperação dos dados originais se necessário
