@@ -1,7 +1,4 @@
 {
-  "/admin/pedidos/page": "app/admin/pedidos/page.js",
-  "/admin/categorias/page": "app/admin/categorias/page.js",
-  "/admin/produtos/page": "app/admin/produtos/page.js",
-  "/admin/configuracoes/page": "app/admin/configuracoes/page.js",
-  "/admin/page": "app/admin/page.js"
+  "/admin/page": "app/admin/page.js",
+  "/admin/configuracoes/page": "app/admin/configuracoes/page.js"
 }

@@ -44,6 +44,11 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   
+  // Estado para limpeza de dados
+  const [showClearDataModal, setShowClearDataModal] = useState(false)
+  const [clearDataPassword, setClearDataPassword] = useState('')
+  const [clearingData, setClearingData] = useState(false)
+  
   useEffect(() => {
     fetchSettings()
   }, [])
@@ -342,6 +347,78 @@ export default function SettingsPage() {
     return numericValue
   }
 
+  // Função para limpar todos os dados do sistema
+  const handleClearAllData = async () => {
+    if (clearDataPassword !== 'P@ssw0rd2025') {
+      toast.error('Senha incorreta!')
+      return
+    }
+
+    try {
+      setClearingData(true)
+      
+      // Lista de tabelas para limpar (em ordem devido às dependências)
+      const tablesToClear = [
+        'order_items',     // Primeiro os itens (dependem de orders e products)
+        'orders',          // Depois os pedidos
+        'product_extras',  // Adicionais dos produtos
+        'product_variations', // Variações dos produtos
+        'products',        // Produtos (dependem de categories)
+        'categories'       // Por último as categorias
+      ]
+      
+      let clearedCount = 0
+      
+      for (const table of tablesToClear) {
+        const { error } = await supabase
+          .from(table as any)
+          .delete()
+          .neq('id', '') // Deleta todos os registros
+        
+        if (error) {
+          console.error(`Erro ao limpar tabela ${table}:`, error)
+          throw error
+        }
+        
+        clearedCount++
+        toast.loading(`Limpando dados... ${clearedCount}/${tablesToClear.length}`)
+      }
+      
+      // Resetar configurações para valores padrão (mantendo apenas configurações básicas)
+      const defaultSettings = [
+        { key: 'store_open', value: 'false' },
+        { key: 'auto_schedule_enabled', value: 'false' },
+        { key: 'manual_override', value: 'false' },
+        { key: 'delivery_fee', value: '0.00' },
+        { key: 'min_order_value', value: '0.00' },
+        { key: 'delivery_time', value: '30-45' },
+        { key: 'delivery_radius', value: '5' },
+      ]
+      
+      for (const setting of defaultSettings) {
+        await saveConfigItem(setting.key, setting.value)
+      }
+      
+      toast.dismiss()
+      toast.success('🎉 Todos os dados foram removidos com sucesso!')
+      toast.success('Sistema resetado para produção!', { duration: 4000 })
+      
+      // Fechar modal e resetar estado
+      setShowClearDataModal(false)
+      setClearDataPassword('')
+      
+      // Recarregar as configurações
+      await fetchSettings()
+      
+    } catch (error) {
+      console.error('Erro ao limpar dados:', error)
+      toast.dismiss()
+      toast.error('Erro ao limpar dados do sistema')
+    } finally {
+      setClearingData(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -388,6 +465,16 @@ export default function SettingsPage() {
                 }`}
               >
                 Entrega
+              </button>
+              <button
+                onClick={() => setActiveTab('system')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'system' 
+                    ? 'border-red-500 text-red-600' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Sistema
               </button>
             </nav>
           </div>
@@ -734,6 +821,60 @@ export default function SettingsPage() {
               </div>
             )}
             
+            {/* Configurações do Sistema */}
+            {activeTab === 'system' && (
+              <div className="space-y-6">
+                <div className="bg-red-50 rounded-lg p-6 border border-red-200">
+                  <div className="flex items-start space-x-4">
+                    <div className="flex-shrink-0">
+                      <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-medium text-red-900">Zona de Perigo</h3>
+                      <p className="text-red-700 mt-1 mb-4">
+                        Esta seção contém operações irreversíveis que podem afetar permanentemente o sistema.
+                      </p>
+                      
+                      <div className="bg-white rounded-lg p-4 border border-red-300">
+                        <h4 className="font-medium text-gray-900 mb-2">Limpar Todos os Dados</h4>
+                        <p className="text-sm text-gray-600 mb-4">
+                          Remove <strong>TODOS</strong> os dados cadastrados no sistema incluindo:
+                          categorias, produtos, pedidos, variações, adicionais e redefine configurações.
+                        </p>
+                        
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
+                          <div className="flex items-center">
+                            <svg className="w-5 h-5 text-yellow-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                            <p className="text-sm text-yellow-800 font-medium">
+                              ⚠️ Esta ação é <strong>IRREVERSÍVEL</strong> e não pode ser desfeita!
+                            </p>
+                          </div>
+                          <p className="text-sm text-yellow-700 mt-1 ml-7">
+                            Use apenas para preparar o sistema para produção após testes.
+                          </p>
+                        </div>
+                        
+                        <button
+                          type="button"
+                          onClick={() => setShowClearDataModal(true)}
+                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 font-medium"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          Limpar Todos os Dados
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="pt-4 border-t border-gray-200 flex justify-end">
               <button
                 type="submit"
@@ -751,6 +892,103 @@ export default function SettingsPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+      
+      {/* Modal de Confirmação para Limpeza de Dados */}
+      {showClearDataModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="flex-shrink-0">
+                  <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900">Confirmar Limpeza de Dados</h3>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-gray-600 mb-4">
+                  Esta ação irá <strong className="text-red-600">REMOVER PERMANENTEMENTE</strong> todos os dados:
+                </p>
+                
+                <ul className="text-sm text-gray-600 space-y-1 mb-4">
+                  <li className="flex items-center">
+                    <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                    Todas as categorias e produtos
+                  </li>
+                  <li className="flex items-center">
+                    <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                    Todos os pedidos e histórico
+                  </li>
+                  <li className="flex items-center">
+                    <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                    Variações e adicionais
+                  </li>
+                  <li className="flex items-center">
+                    <span className="w-2 h-2 bg-red-500 rounded-full mr-2"></span>
+                    Configurações de entrega
+                  </li>
+                </ul>
+                
+                <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+                  <p className="text-sm text-red-800 font-medium">
+                    ⚠️ Esta ação NÃO PODE ser desfeita!
+                  </p>
+                </div>
+                
+                <div>
+                  <label htmlFor="clear-password" className="block text-sm font-medium text-gray-700 mb-2">
+                    Digite a senha para confirmar:
+                  </label>
+                  <input
+                    id="clear-password"
+                    type="password"
+                    value={clearDataPassword}
+                    onChange={(e) => setClearDataPassword(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    placeholder="Digite a senha de confirmação"
+                    disabled={clearingData}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Senha necessária para autorizar esta operação crítica.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowClearDataModal(false)
+                    setClearDataPassword('')
+                  }}
+                  disabled={clearingData}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={handleClearAllData}
+                  disabled={clearingData || !clearDataPassword}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {clearingData ? (
+                    <>
+                      <div className="animate-spin h-4 w-4 border-2 border-white rounded-full border-t-transparent"></div>
+                      Limpando...
+                    </>
+                  ) : (
+                    'Confirmar Limpeza'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
