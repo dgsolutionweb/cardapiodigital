@@ -1,4 +1,4 @@
-// File: /projetos/cardapiodigital/src/app/layout.tsx
+// File: C:\Users\All Import\Documents\projetos\cardapiodigital\src\app\layout.tsx
 import * as entry from '../../../src/app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

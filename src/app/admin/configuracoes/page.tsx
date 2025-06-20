@@ -370,14 +370,28 @@ export default function SettingsPage() {
       let clearedCount = 0
       
       for (const table of tablesToClear) {
-        const { error } = await supabase
+        // Primeiro buscar todos os IDs da tabela
+        const { data: records, error: fetchError } = await supabase
           .from(table as any)
-          .delete()
-          .neq('id', '') // Deleta todos os registros
+          .select('id')
         
-        if (error) {
-          console.error(`Erro ao limpar tabela ${table}:`, error)
-          throw error
+        if (fetchError) {
+          console.error(`Erro ao buscar registros da tabela ${table}:`, fetchError)
+          throw fetchError
+        }
+        
+        // Se há registros, deletar todos usando a lista de IDs
+        if (records && records.length > 0) {
+          const ids = records.map((record: any) => record.id)
+          const { error: deleteError } = await supabase
+            .from(table as any)
+            .delete()
+            .in('id', ids)
+          
+          if (deleteError) {
+            console.error(`Erro ao limpar tabela ${table}:`, deleteError)
+            throw deleteError
+          }
         }
         
         clearedCount++

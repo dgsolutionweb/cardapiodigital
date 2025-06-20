@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -10,7 +10,7 @@ import { useStoreStatus } from '@/hooks/useStoreStatus'
 import { toast } from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 
-export default function CartPage() {
+function CartContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { items, total, updateQuantity, removeItem, clearCart } = useCartStore()
@@ -690,5 +690,20 @@ export default function CartPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function CartPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-md p-8 max-w-md w-full text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-primary rounded-full border-t-transparent mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando carrinho...</p>
+        </div>
+      </div>
+    }>
+      <CartContent />
+    </Suspense>
   )
 }
