@@ -32,6 +32,7 @@ interface Extra {
   name: string
   price: string
   order_index: number
+  required: boolean
 }
 
 export default function EditProductPage({ params }: PageProps) {
@@ -124,7 +125,8 @@ export default function EditProductPage({ params }: PageProps) {
               id: e.id,
               name: e.name,
               price: e.price.toString(),
-              order_index: e.order_index
+              order_index: e.order_index,
+              required: e.required || false
             })))
           }
         }
@@ -180,11 +182,12 @@ export default function EditProductPage({ params }: PageProps) {
     setExtras([...extras, {
       name: '',
       price: '',
-      order_index: extras.length
+      order_index: extras.length,
+      required: false
     }])
   }
   
-  const updateExtra = (index: number, field: keyof Extra, value: string | number) => {
+  const updateExtra = (index: number, field: keyof Extra, value: string | number | boolean) => {
     const newExtras = [...extras]
     newExtras[index] = { ...newExtras[index], [field]: value }
     setExtras(newExtras)
@@ -237,8 +240,8 @@ export default function EditProductPage({ params }: PageProps) {
         if (!extra.name.trim()) {
           return toast.error(`Nome do adicional ${i + 1} é obrigatório`)
         }
-        if (!extra.price || isNaN(parseFloat(extra.price)) || parseFloat(extra.price) < 0) {
-          return toast.error(`Preço do adicional ${i + 1} deve ser válido`)
+        if (extra.price !== '' && (isNaN(parseFloat(extra.price)) || parseFloat(extra.price) < 0)) {
+          return toast.error(`Preço do adicional ${i + 1} deve ser um valor válido (pode ser 0.00 para gratuito)`)
         }
       }
     }
@@ -314,8 +317,9 @@ export default function EditProductPage({ params }: PageProps) {
           const extrasToInsert = extras.map(e => ({
             product_id: id,
             name: e.name,
-            price: parseFloat(e.price),
-            order_index: e.order_index
+            price: e.price === '' ? 0 : parseFloat(e.price),
+            order_index: e.order_index,
+            required: e.required
           }))
           
           const { error: extrasError } = await supabase
@@ -606,7 +610,7 @@ export default function EditProductPage({ params }: PageProps) {
         {hasExtras && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Adicionais Opcionais</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Adicionais</h2>
               <button
                 type="button"
                 onClick={addExtra}
@@ -621,44 +625,69 @@ export default function EditProductPage({ params }: PageProps) {
                 Nenhum adicional adicionado. Clique em "Adicionar Adicional" para começar.
               </p>
             ) : (
-              <div className="space-y-3">
-                {extras.map((extra, index) => (
-                  <div key={index} className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 border border-gray-200 rounded-md">
-                    <div>
-                      <input
-                        type="text"
-                        placeholder="Nome do adicional (ex: Bacon)"
-                        value={extra.name}
-                        onChange={(e) => updateExtra(index, 'name', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                      />
+              <>
+                <div className="space-y-4">
+                  {extras.map((extra, index) => (
+                    <div key={index} className="bg-gray-50 p-4 border border-gray-200 rounded-md">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                        <div>
+                          <input
+                            type="text"
+                            placeholder="Nome do adicional (ex: Bacon)"
+                            value={extra.name}
+                            onChange={(e) => updateExtra(index, 'name', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="text"
+                            placeholder="Preço adicional (pode ser 0.00 para gratuito)"
+                            value={extra.price}
+                            onChange={(e) => updateExtra(index, 'price', e.target.value.replace(/[^0-9.]/g, ''))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          />
+                          {extra.price && !isNaN(parseFloat(extra.price)) && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {parseFloat(extra.price) === 0 ? 'Gratuito' : `+ ${formatCurrency(parseFloat(extra.price))}`}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center">
+                          <button
+                            type="button"
+                            onClick={() => removeExtra(index)}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`required-edit-${index}`}
+                          checked={extra.required}
+                          onChange={(e) => updateExtra(index, 'required', e.target.checked)}
+                          className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                        />
+                        <label htmlFor={`required-edit-${index}`} className="ml-2 text-sm text-gray-700">
+                          Este adicional é obrigatório
+                        </label>
+                        {extra.required && (
+                          <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
+                            Obrigatório
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <input
-                        type="text"
-                        placeholder="Preço adicional"
-                        value={extra.price}
-                        onChange={(e) => updateExtra(index, 'price', e.target.value.replace(/[^0-9.]/g, ''))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                      />
-                      {extra.price && !isNaN(parseFloat(extra.price)) && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          + {formatCurrency(parseFloat(extra.price))}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center">
-                      <button
-                        type="button"
-                        onClick={() => removeExtra(index)}
-                        className="text-red-600 hover:text-red-800 text-sm font-medium"
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+                <div className="mt-3 text-sm text-gray-500">
+                  <p>Os adicionais podem ser opcionais ou obrigatórios. Adicionais obrigatórios devem ser selecionados pelo cliente antes de adicionar ao carrinho.</p>
+                  <p>Deixe o preço em 0.00 para adicionais gratuitos.</p>
+                </div>
+              </>
             )}
           </div>
         )}

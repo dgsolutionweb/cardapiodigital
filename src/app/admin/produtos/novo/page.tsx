@@ -22,6 +22,7 @@ type ProductExtra = {
   name: string
   price: string
   order_index: number
+  required: boolean
 }
 
 export default function NewProductPage() {
@@ -132,15 +133,16 @@ export default function NewProductPage() {
       {
         name: '',
         price: '',
-        order_index: extras.length
+        order_index: extras.length,
+        required: false
       }
     ])
   }
   
-  const updateExtra = (index: number, field: keyof ProductExtra, value: string) => {
+  const updateExtra = (index: number, field: keyof ProductExtra, value: string | boolean) => {
     const updatedExtras = [...extras]
     
-    if (field === 'price') {
+    if (field === 'price' && typeof value === 'string') {
       // Permitir apenas números e ponto para preços
       value = value.replace(/[^0-9.]/g, '')
     }
@@ -201,8 +203,8 @@ export default function NewProductPage() {
         if (!extra.name.trim()) {
           return toast.error(`Informe o nome do adicional ${i+1}`)
         }
-        if (!extra.price || isNaN(parseFloat(extra.price)) || parseFloat(extra.price) <= 0) {
-          return toast.error(`Informe um preço válido para o adicional ${extra.name}`)
+        if (extra.price !== '' && (isNaN(parseFloat(extra.price)) || parseFloat(extra.price) < 0)) {
+          return toast.error(`Preço do adicional ${extra.name} deve ser um valor válido (pode ser 0.00 para gratuito)`)
         }
       }
     }
@@ -261,8 +263,9 @@ export default function NewProductPage() {
         const extrasToInsert = extras.map(extra => ({
           product_id: productId,
           name: extra.name,
-          price: parseFloat(extra.price),
-          order_index: extra.order_index
+          price: extra.price === '' ? 0 : parseFloat(extra.price),
+          order_index: extra.order_index,
+          required: extra.required
         }))
         
         const { error: extraError } = await supabase
@@ -507,37 +510,61 @@ export default function NewProductPage() {
                   ) : (
                     <div className="space-y-3">
                       {extras.map((extra, index) => (
-                        <div key={index} className="flex items-center space-x-3 bg-white p-3 rounded border">
-                          <div className="flex-grow">
-                            <input
-                              type="text"
-                              value={extra.name}
-                              onChange={(e) => updateExtra(index, 'name', e.target.value)}
-                              placeholder="Nome do adicional (ex: Bacon, Queijo Extra)"
-                              className="input py-1 mb-1 w-full"
-                            />
+                        <div key={index} className="bg-white p-4 rounded border">
+                          <div className="flex items-start space-x-3">
+                            <div className="flex-grow">
+                              <input
+                                type="text"
+                                value={extra.name}
+                                onChange={(e) => updateExtra(index, 'name', e.target.value)}
+                                placeholder="Nome do adicional (ex: Bacon, Queijo Extra)"
+                                className="input py-2 mb-2 w-full"
+                              />
+                            </div>
+                            <div className="w-28">
+                              <input
+                                type="text"
+                                value={extra.price}
+                                onChange={(e) => updateExtra(index, 'price', e.target.value)}
+                                placeholder="0.00"
+                                className="input py-2 mb-2 w-full"
+                              />
+                              {extra.price !== '' && !isNaN(parseFloat(extra.price)) && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {parseFloat(extra.price) === 0 ? 'Gratuito' : `+ ${formatCurrency(parseFloat(extra.price))}`}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeExtra(index)}
+                              className="p-2 text-red-500 hover:text-red-700 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 6h18" />
+                                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                                <line x1="10" y1="11" x2="10" y2="17" />
+                                <line x1="14" y1="11" x2="14" y2="17" />
+                              </svg>
+                            </button>
                           </div>
-                          <div className="w-28">
+                          <div className="flex items-center mt-2">
                             <input
-                              type="text"
-                              value={extra.price}
-                              onChange={(e) => updateExtra(index, 'price', e.target.value)}
-                              placeholder="Preço"
-                              className="input py-1 mb-1 w-full"
+                              type="checkbox"
+                              id={`required-${index}`}
+                              checked={extra.required}
+                              onChange={(e) => updateExtra(index, 'required', e.target.checked)}
+                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                             />
+                            <label htmlFor={`required-${index}`} className="ml-2 text-sm text-gray-700">
+                              Este adicional é obrigatório
+                            </label>
+                            {extra.required && (
+                              <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
+                                Obrigatório
+                              </span>
+                            )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => removeExtra(index)}
-                            className="p-1 text-red-500 hover:text-red-700 transition-colors"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M3 6h18" />
-                              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                              <line x1="10" y1="11" x2="10" y2="17" />
-                              <line x1="14" y1="11" x2="14" y2="17" />
-                            </svg>
-                          </button>
                         </div>
                       ))}
                     </div>
@@ -547,7 +574,7 @@ export default function NewProductPage() {
 
               {hasExtras && (
                 <div className="mt-2 text-sm text-gray-500">
-                  Os adicionais são opcionais e o cliente pode selecionar vários ao fazer o pedido.
+                  Os adicionais podem ser opcionais ou obrigatórios. Adicionais obrigatórios devem ser selecionados pelo cliente antes de adicionar ao carrinho. Você pode deixar o preço em 0.00 para adicionais gratuitos.
                 </div>
               )}
             </div>

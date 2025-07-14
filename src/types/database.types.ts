@@ -238,6 +238,7 @@ export type Database = {
           name: string
           price: number
           order_index: number
+          required: boolean
           created_at: string
           updated_at: string | null
         }
@@ -247,6 +248,7 @@ export type Database = {
           name: string
           price: number
           order_index?: number
+          required?: boolean
           created_at?: string
           updated_at?: string | null
         }
@@ -256,6 +258,7 @@ export type Database = {
           name?: string
           price?: number
           order_index?: number
+          required?: boolean
           created_at?: string
           updated_at?: string | null
         }

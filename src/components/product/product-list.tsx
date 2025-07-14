@@ -208,6 +208,22 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
       return
     }
     
+    // Verificar se o produto possui extras
+    if (selectedProduct.has_extras && productExtras.length > 0) {
+      // Verificar se há extras obrigatórios
+      const requiredExtras = productExtras.filter(extra => extra.required)
+      
+      if (requiredExtras.length > 0) {
+        // Verificar se todos os extras obrigatórios foram selecionados
+        const selectedRequiredExtras = selectedExtras.filter(extra => extra.required)
+        if (selectedRequiredExtras.length !== requiredExtras.length) {
+          toast.error('Por favor, selecione todos os adicionais obrigatórios')
+          return
+        }
+      }
+      // Se não há extras obrigatórios, o cliente pode adicionar sem selecionar nenhum adicional
+    }
+    
     // Construir detalhes de variação e extras para o carrinho
     const variationName = selectedVariation ? selectedVariation.name : ''
     const extrasInfo = selectedExtras.length > 0 
@@ -450,7 +466,14 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
                   {/* Seção de adicionais */}
                   {selectedProduct?.has_extras && productExtras.length > 0 && (
                     <div>
-                      <h4 className="font-medium text-gray-700 mb-3">Adicionais (opcional):</h4>
+                      <h4 className="font-medium text-gray-700 mb-1">Selecione os adicionais:</h4>
+                      {productExtras.some(extra => extra.required) ? (
+                        <p className="text-sm text-gray-500 mb-3">
+                          <span className="text-orange-600 font-medium">⚠ Itens marcados com * são obrigatórios</span>
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-500 mb-3">Adicionais opcionais - você pode escolher ou não</p>
+                      )}
                       <div className="space-y-2">
                         {productExtras.map((extra) => {
                           const isSelected = selectedExtras.some(item => item.id === extra.id);
@@ -458,7 +481,7 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
                             <div 
                               key={extra.id}
                               onClick={() => handleExtraToggle(extra)}
-                              className={`border rounded-lg p-3 flex justify-between items-center cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary bg-opacity-5' : 'hover:bg-gray-50'}`}
+                              className={`border rounded-lg p-3 flex justify-between items-center cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary bg-opacity-5' : 'hover:bg-gray-50'} ${extra.required ? 'border-orange-200 bg-orange-50' : ''}`}
                             >
                               <div className="flex items-center space-x-3">
                                 <div className={`w-5 h-5 rounded border flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'border-gray-300'}`}>
@@ -468,9 +491,21 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
                                     </svg>
                                   )}
                                 </div>
-                                <span className="font-medium">{extra.name}</span>
+                                <div className="flex items-center">
+                                  <span className="font-medium">{extra.name}</span>
+                                  {extra.required && (
+                                    <span className="text-orange-600 font-bold ml-1">*</span>
+                                  )}
+                                  {extra.required && (
+                                    <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
+                                      Obrigatório
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <span className="font-bold text-primary">+{formatCurrency(extra.price)}</span>
+                              <span className="font-bold text-primary">
+                                {extra.price === 0 ? 'Grátis' : `+${formatCurrency(extra.price)}`}
+                              </span>
                             </div>
                           );
                         })}
@@ -496,14 +531,22 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
               </div>
               <button 
                 onClick={handleAddToCart}
-                disabled={selectedProduct?.has_variations && !selectedVariation}
+                disabled={
+                  (selectedProduct?.has_variations && !selectedVariation) ||
+                  (selectedProduct?.has_extras && productExtras.length > 0 && selectedExtras.length === 0)
+                }
                 className={`w-full py-4 rounded-lg text-white font-medium text-lg shadow-md ${
-                  selectedProduct?.has_variations && !selectedVariation 
+                  (selectedProduct?.has_variations && !selectedVariation) ||
+                  (selectedProduct?.has_extras && productExtras.length > 0 && selectedExtras.length === 0)
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-gradient-to-r from-primary to-primary-light hover:shadow-lg animate-pulse transform hover:scale-[1.02] transition-all'
                 }`}
               >
-                Adicionar ao carrinho
+                {(selectedProduct?.has_variations && !selectedVariation) 
+                  ? 'Selecione uma opção' 
+                  : (selectedProduct?.has_extras && productExtras.length > 0 && selectedExtras.length === 0)
+                  ? 'Selecione pelo menos um adicional'
+                  : 'Adicionar ao carrinho'}
               </button>
             </div>
           </div>
