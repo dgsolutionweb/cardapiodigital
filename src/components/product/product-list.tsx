@@ -47,6 +47,11 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
   const [modalOpen, setModalOpen] = useState(false)
   const [loadingVariations, setLoadingVariations] = useState(false)
   const [quantity, setQuantity] = useState(1)
+  
+  // Estados para combos
+  const [comboSelections, setComboSelections] = useState<{[key: string]: number}>({})
+  const [totalComboQuantity, setTotalComboQuantity] = useState(0)
+  
   const { addItem } = useCartStore()
   
   useEffect(() => {
@@ -133,6 +138,7 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
     setSelectedProduct(product)
     setSelectedVariation(null)
     setSelectedExtras([])
+    setComboSelections({}) // Reset combo selections
     setModalOpen(true)
     setLoadingVariations(true)
     
@@ -181,6 +187,8 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
       setSelectedProduct(null)
       setSelectedVariation(null)
       setSelectedExtras([])
+      setComboSelections({})
+      setTotalComboQuantity(0)
     }, 300) // Delay para animação de fechamento
   }
   
@@ -199,6 +207,87 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
     })
   }
   
+  // Função para lidar com combos
+  const handleComboQuantityChange = (extraId: string, change: number) => {
+    console.log('handleComboQuantityChange called:', { extraId, change, isCombo: selectedProduct?.is_combo })
+    
+    if (!selectedProduct?.is_combo) {
+      console.log('Not a combo product, returning')
+      return
+    }
+    
+    const extra = productExtras.find(e => e.id === extraId)
+    if (!extra) {
+      console.log('Extra not found:', extraId)
+      return
+    }
+    
+    console.log('Extra found:', extra)
+    
+    setComboSelections(prev => {
+      console.log('Current selections:', prev)
+      const currentQuantity = prev[extraId] || 0
+      let newQuantity = currentQuantity + change
+      
+      console.log('Quantity change:', { currentQuantity, newQuantity, change })
+      
+      // Se está incrementando de 0, ir direto para a quantidade mínima
+      if (currentQuantity === 0 && change > 0) {
+        newQuantity = extra.min_quantity
+      }
+      
+      // Não permitir valores negativos
+      newQuantity = Math.max(0, newQuantity)
+      
+      console.log('Adjusted quantity:', newQuantity)
+      
+      // Verificar quantidade máxima
+      if (extra.max_quantity && newQuantity > extra.max_quantity) {
+        console.log('Above maximum quantity:', { newQuantity, max: extra.max_quantity })
+        return prev
+      }
+      
+      // Calcular novo total
+      const newSelections = { ...prev, [extraId]: newQuantity }
+      const newTotal = Object.values(newSelections).reduce((sum, qty) => sum + qty, 0)
+      
+      console.log('New total calculation:', { newSelections, newTotal, comboLimit: selectedProduct.combo_quantity })
+      
+      // Verificar se não excede o limite do combo
+      if (newTotal > selectedProduct.combo_quantity!) {
+        console.log('Exceeds combo limit')
+        return prev
+      }
+      
+      // Atualizar total
+      setTotalComboQuantity(newTotal)
+      console.log('Updated total:', newTotal)
+      
+      return newSelections
+    })
+  }
+  
+  const setComboQuantity = (extraId: string, quantity: number) => {
+    if (!selectedProduct?.is_combo) return
+    
+    const extra = productExtras.find(e => e.id === extraId)
+    if (!extra) return
+    
+    // Verificar limites
+    if (quantity > 0 && quantity < extra.min_quantity) return
+    if (extra.max_quantity && quantity > extra.max_quantity) return
+    
+    setComboSelections(prev => {
+      const newSelections = { ...prev, [extraId]: quantity }
+      const newTotal = Object.values(newSelections).reduce((sum, qty) => sum + qty, 0)
+      
+      if (newTotal > selectedProduct.combo_quantity!) return prev
+      
+      setTotalComboQuantity(newTotal)
+      return newSelections
+    })
+  }
+  
   const handleAddToCart = () => {
     if (!selectedProduct) return
     
@@ -208,32 +297,71 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
       return
     }
     
-    // Verificar se o produto possui extras
-    if (selectedProduct.has_extras && productExtras.length > 0) {
-      // Verificar se há extras obrigatórios
-      const requiredExtras = productExtras.filter(extra => extra.required)
-      
-      if (requiredExtras.length > 0) {
-        // Verificar se todos os extras obrigatórios foram selecionados
-        const selectedRequiredExtras = selectedExtras.filter(extra => extra.required)
-        if (selectedRequiredExtras.length !== requiredExtras.length) {
-          toast.error('Por favor, selecione todos os adicionais obrigatórios')
-          return
-        }
+    // Verificar se é um combo
+    if (selectedProduct.is_combo) {
+      // Verificar se a quantidade total está correta
+      if (totalComboQuantity !== selectedProduct.combo_quantity) {
+        toast.error(`Selecione exatamente ${selectedProduct.combo_quantity} itens para o combo`)
+        return
       }
-      // Se não há extras obrigatórios, o cliente pode adicionar sem selecionar nenhum adicional
+      
+      // Verificar se todas as seleções respeitam a quantidade mínima
+      const hasInvalidSelection = Object.entries(comboSelections).some(([extraId, quantity]) => {
+        const extra = productExtras.find(e => e.id === extraId)
+        return extra && quantity > 0 && quantity < extra.min_quantity
+      })
+      
+      if (hasInvalidSelection) {
+        toast.error('Algumas seleções não atingem a quantidade mínima')
+        return
+      }
+    } else {
+      // Verificar se o produto possui extras (lógica original)
+      if (selectedProduct.has_extras && productExtras.length > 0) {
+        // Verificar se há extras obrigatórios
+        const requiredExtras = productExtras.filter(extra => extra.required)
+        
+        if (requiredExtras.length > 0) {
+          // Verificar se todos os extras obrigatórios foram selecionados
+          const selectedRequiredExtras = selectedExtras.filter(extra => extra.required)
+          if (selectedRequiredExtras.length !== requiredExtras.length) {
+            toast.error('Por favor, selecione todos os adicionais obrigatórios')
+            return
+          }
+        }
+        // Se não há extras obrigatórios, o cliente pode adicionar sem selecionar nenhum adicional
+      }
     }
     
     // Construir detalhes de variação e extras para o carrinho
     const variationName = selectedVariation ? selectedVariation.name : ''
-    const extrasInfo = selectedExtras.length > 0 
-      ? selectedExtras.map(e => e.name).join(', ') 
-      : ''
+    let extrasInfo = ''
+    
+    if (selectedProduct.is_combo) {
+      // Para combos, mostrar as quantidades selecionadas
+      const comboDetails = Object.entries(comboSelections)
+        .filter(([_, quantity]) => quantity > 0)
+        .map(([extraId, quantity]) => {
+          const extra = productExtras.find(e => e.id === extraId)
+          return `${extra?.name}: ${quantity}`
+        })
+        .join(', ')
+      extrasInfo = comboDetails
+    } else {
+      // Para produtos normais, mostrar extras selecionados
+      extrasInfo = selectedExtras.length > 0 
+        ? selectedExtras.map(e => e.name).join(', ') 
+        : ''
+    }
     
     // Preço base é o preço da variação (se houver) ou o preço do produto
     const basePrice = selectedVariation ? selectedVariation.price : selectedProduct.price
-    // Adicionar o preço dos extras
-    const extrasPrice = selectedExtras.reduce((total, extra) => total + extra.price, 0)
+    
+    // Adicionar o preço dos extras (apenas para produtos não-combo)
+    let extrasPrice = 0
+    if (!selectedProduct.is_combo) {
+      extrasPrice = selectedExtras.reduce((total, extra) => total + extra.price, 0)
+    }
     
     // Adicionar ao carrinho
     addItem({
@@ -466,50 +594,123 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
                   {/* Seção de adicionais */}
                   {selectedProduct?.has_extras && productExtras.length > 0 && (
                     <div>
-                      <h4 className="font-medium text-gray-700 mb-1">Selecione os adicionais:</h4>
-                      {productExtras.some(extra => extra.required) ? (
-                        <p className="text-sm text-gray-500 mb-3">
-                          <span className="text-orange-600 font-medium">⚠ Itens marcados com * são obrigatórios</span>
-                        </p>
-                      ) : (
-                        <p className="text-sm text-gray-500 mb-3">Adicionais opcionais - você pode escolher ou não</p>
-                      )}
-                      <div className="space-y-2">
-                        {productExtras.map((extra) => {
-                          const isSelected = selectedExtras.some(item => item.id === extra.id);
-                          return (
-                            <div 
-                              key={extra.id}
-                              onClick={() => handleExtraToggle(extra)}
-                              className={`border rounded-lg p-3 flex justify-between items-center cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary bg-opacity-5' : 'hover:bg-gray-50'} ${extra.required ? 'border-orange-200 bg-orange-50' : ''}`}
-                            >
-                              <div className="flex items-center space-x-3">
-                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'border-gray-300'}`}>
-                                  {isSelected && (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
-                                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                    </svg>
-                                  )}
-                                </div>
-                                <div className="flex items-center">
-                                  <span className="font-medium">{extra.name}</span>
-                                  {extra.required && (
-                                    <span className="text-orange-600 font-bold ml-1">*</span>
-                                  )}
-                                  {extra.required && (
-                                    <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
-                                      Obrigatório
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <span className="font-bold text-primary">
-                                {extra.price === 0 ? 'Grátis' : `+${formatCurrency(extra.price)}`}
-                              </span>
+                      {selectedProduct.is_combo ? (
+                        <>
+                          <h4 className="font-medium text-gray-700 mb-1">
+                            {selectedProduct.combo_description || `Escolha ${selectedProduct.combo_quantity} itens:`}
+                          </h4>
+                          <div className="flex justify-between items-center mb-3">
+                            <p className="text-sm text-gray-500">
+                              Selecionados: {totalComboQuantity}/{selectedProduct.combo_quantity}
+                            </p>
+                            <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              totalComboQuantity === selectedProduct.combo_quantity 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-orange-100 text-orange-800'
+                            }`}>
+                              {totalComboQuantity === selectedProduct.combo_quantity ? 'Completo' : 'Incompleto'}
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+                          <div className="space-y-3">
+                            {productExtras.filter(extra => extra.is_countable).map((extra) => {
+                              const currentQuantity = comboSelections[extra.id] || 0;
+                              console.log(`Current quantity for ${extra.name} (${extra.id}):`, currentQuantity);
+                              return (
+                                <div key={extra.id} className="border rounded-lg p-3">
+                                  <div className="flex justify-between items-center mb-2">
+                                    <div className="flex items-center">
+                                      <span className="font-medium">{extra.name}</span>
+                                      <span className="ml-2 text-sm text-gray-500">
+                                        (mín: {extra.min_quantity})
+                                      </span>
+                                    </div>
+                                    <span className="font-bold text-primary">
+                                      {extra.price === 0 ? 'Incluído' : `+${formatCurrency(extra.price)}`}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                      <button
+                                        onClick={() => handleComboQuantityChange(extra.id, -1)}
+                                        disabled={currentQuantity <= 0}
+                                        className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-lg font-medium"
+                                      >
+                                        -
+                                      </button>
+                                      <span className="w-8 text-center font-medium">{currentQuantity}</span>
+                                      <button
+                                        onClick={() => {
+                                          console.log('Plus button clicked for:', extra.id)
+                                          console.log('Current totalComboQuantity:', totalComboQuantity)
+                                          console.log('Combo limit:', selectedProduct.combo_quantity)
+                                          console.log('Button disabled?', totalComboQuantity >= selectedProduct.combo_quantity!)
+                                          handleComboQuantityChange(extra.id, 1)
+                                        }}
+                                        disabled={totalComboQuantity >= selectedProduct.combo_quantity!}
+                                        className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-lg font-medium"
+                                      >
+                                        +
+                                      </button>
+                                    </div>
+                                    {currentQuantity > 0 && currentQuantity < extra.min_quantity && (
+                                      <span className="text-red-500 text-sm">
+                                        Mínimo: {extra.min_quantity}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <h4 className="font-medium text-gray-700 mb-1">Selecione os adicionais:</h4>
+                          {productExtras.some(extra => extra.required) ? (
+                            <p className="text-sm text-gray-500 mb-3">
+                              <span className="text-orange-600 font-medium">⚠ Itens marcados com * são obrigatórios</span>
+                            </p>
+                          ) : (
+                            <p className="text-sm text-gray-500 mb-3">Adicionais opcionais - você pode escolher ou não</p>
+                          )}
+                          <div className="space-y-2">
+                            {productExtras.map((extra) => {
+                              const isSelected = selectedExtras.some(item => item.id === extra.id);
+                              return (
+                                <div 
+                                  key={extra.id}
+                                  onClick={() => handleExtraToggle(extra)}
+                                  className={`border rounded-lg p-3 flex justify-between items-center cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary bg-opacity-5' : 'hover:bg-gray-50'} ${extra.required ? 'border-orange-200 bg-orange-50' : ''}`}
+                                >
+                                  <div className="flex items-center space-x-3">
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+                                      {isSelected && (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                        </svg>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center">
+                                      <span className="font-medium">{extra.name}</span>
+                                      {extra.required && (
+                                        <span className="text-orange-600 font-bold ml-1">*</span>
+                                      )}
+                                      {extra.required && (
+                                        <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
+                                          Obrigatório
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <span className="font-bold text-primary">
+                                    {extra.price === 0 ? 'Grátis' : `+${formatCurrency(extra.price)}`}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -524,7 +725,7 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
                   {formatCurrency(
                     quantity * (
                       (selectedVariation ? selectedVariation.price : selectedProduct?.price || 0) + 
-                      selectedExtras.reduce((total, extra) => total + extra.price, 0)
+                      (!selectedProduct?.is_combo ? selectedExtras.reduce((total, extra) => total + extra.price, 0) : 0)
                     )
                   )}
                 </span>
@@ -533,19 +734,29 @@ export function ProductList({ categoryId, storeOpen = true, searchTerm = '' }: P
                 onClick={handleAddToCart}
                 disabled={
                   (selectedProduct?.has_variations && !selectedVariation) ||
-                  (selectedProduct?.has_extras && productExtras.length > 0 && selectedExtras.length === 0)
+                  (selectedProduct?.is_combo && totalComboQuantity !== selectedProduct.combo_quantity) ||
+                  (!selectedProduct?.is_combo && selectedProduct?.has_extras && productExtras.length > 0 && 
+                   productExtras.some(extra => extra.required) && 
+                   selectedExtras.filter(extra => extra.required).length !== productExtras.filter(extra => extra.required).length)
                 }
                 className={`w-full py-4 rounded-lg text-white font-medium text-lg shadow-md ${
                   (selectedProduct?.has_variations && !selectedVariation) ||
-                  (selectedProduct?.has_extras && productExtras.length > 0 && selectedExtras.length === 0)
+                  (selectedProduct?.is_combo && totalComboQuantity !== selectedProduct.combo_quantity) ||
+                  (!selectedProduct?.is_combo && selectedProduct?.has_extras && productExtras.length > 0 && 
+                   productExtras.some(extra => extra.required) && 
+                   selectedExtras.filter(extra => extra.required).length !== productExtras.filter(extra => extra.required).length)
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-gradient-to-r from-primary to-primary-light hover:shadow-lg animate-pulse transform hover:scale-[1.02] transition-all'
                 }`}
               >
                 {(selectedProduct?.has_variations && !selectedVariation) 
                   ? 'Selecione uma opção' 
-                  : (selectedProduct?.has_extras && productExtras.length > 0 && selectedExtras.length === 0)
-                  ? 'Selecione pelo menos um adicional'
+                  : (selectedProduct?.is_combo && totalComboQuantity !== selectedProduct.combo_quantity)
+                  ? `Selecione ${selectedProduct.combo_quantity} itens (${totalComboQuantity}/${selectedProduct.combo_quantity})`
+                  : (!selectedProduct?.is_combo && selectedProduct?.has_extras && productExtras.length > 0 && 
+                     productExtras.some(extra => extra.required) && 
+                     selectedExtras.filter(extra => extra.required).length !== productExtras.filter(extra => extra.required).length)
+                  ? 'Selecione todos os adicionais obrigatórios'
                   : 'Adicionar ao carrinho'}
               </button>
             </div>

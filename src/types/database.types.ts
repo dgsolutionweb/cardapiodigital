@@ -49,6 +49,9 @@ export type Database = {
           has_variations: boolean
           has_extras: boolean
           active: boolean
+          is_combo: boolean
+          combo_quantity: number | null
+          combo_description: string | null
         }
         Insert: {
           id?: string
@@ -62,6 +65,9 @@ export type Database = {
           has_variations?: boolean
           has_extras?: boolean
           active?: boolean
+          is_combo?: boolean
+          combo_quantity?: number | null
+          combo_description?: string | null
         }
         Update: {
           id?: string
@@ -75,6 +81,9 @@ export type Database = {
           has_variations?: boolean
           has_extras?: boolean
           active?: boolean
+          is_combo?: boolean
+          combo_quantity?: number | null
+          combo_description?: string | null
         }
         Relationships: [
           {
@@ -239,6 +248,9 @@ export type Database = {
           price: number
           order_index: number
           required: boolean
+          min_quantity: number
+          max_quantity: number | null
+          is_countable: boolean
           created_at: string
           updated_at: string | null
         }
@@ -249,6 +261,9 @@ export type Database = {
           price: number
           order_index?: number
           required?: boolean
+          min_quantity?: number
+          max_quantity?: number | null
+          is_countable?: boolean
           created_at?: string
           updated_at?: string | null
         }
@@ -259,6 +274,9 @@ export type Database = {
           price?: number
           order_index?: number
           required?: boolean
+          min_quantity?: number
+          max_quantity?: number | null
+          is_countable?: boolean
           created_at?: string
           updated_at?: string | null
         }

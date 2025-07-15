@@ -23,6 +23,9 @@ type ProductExtra = {
   price: string
   order_index: number
   required: boolean
+  min_quantity: number
+  max_quantity: number | null
+  is_countable: boolean
 }
 
 export default function NewProductPage() {
@@ -42,6 +45,11 @@ export default function NewProductPage() {
   const [hasExtras, setHasExtras] = useState(false)
   const [variations, setVariations] = useState<ProductVariation[]>([])
   const [extras, setExtras] = useState<ProductExtra[]>([])
+  
+  // Estados para combos
+  const [isCombo, setIsCombo] = useState(false)
+  const [comboQuantity, setComboQuantity] = useState('')
+  const [comboDescription, setComboDescription] = useState('')
   
   useEffect(() => {
     const fetchCategories = async () => {
@@ -134,17 +142,32 @@ export default function NewProductPage() {
         name: '',
         price: '',
         order_index: extras.length,
-        required: false
+        required: false,
+        min_quantity: 1,
+        max_quantity: null,
+        is_countable: false
       }
     ])
   }
   
-  const updateExtra = (index: number, field: keyof ProductExtra, value: string | boolean) => {
+  const updateExtra = (index: number, field: keyof ProductExtra, value: string | boolean | number | null) => {
     const updatedExtras = [...extras]
     
     if (field === 'price' && typeof value === 'string') {
       // Permitir apenas números e ponto para preços
       value = value.replace(/[^0-9.]/g, '')
+    }
+    
+    if (field === 'min_quantity' && typeof value === 'string') {
+      // Permitir apenas números para quantidade mínima
+      value = value.replace(/[^0-9]/g, '')
+      value = value === '' ? 1 : parseInt(value)
+    }
+    
+    if (field === 'max_quantity' && typeof value === 'string') {
+      // Permitir apenas números para quantidade máxima
+      value = value.replace(/[^0-9]/g, '')
+      value = value === '' ? null : parseInt(value)
     }
     
     updatedExtras[index] = {
@@ -230,7 +253,10 @@ export default function NewProductPage() {
           category_id: categoryId,
           created_at: new Date().toISOString(),
           has_variations: hasVariations,
-          has_extras: hasExtras
+          has_extras: hasExtras,
+          is_combo: isCombo,
+          combo_quantity: isCombo && comboQuantity ? parseInt(comboQuantity) : null,
+          combo_description: isCombo && comboDescription ? comboDescription : null
         })
         .select('id') // Retornar o ID do produto inserido
       
@@ -265,7 +291,10 @@ export default function NewProductPage() {
           name: extra.name,
           price: extra.price === '' ? 0 : parseFloat(extra.price),
           order_index: extra.order_index,
-          required: extra.required
+          required: extra.required,
+          min_quantity: extra.min_quantity,
+          max_quantity: extra.max_quantity,
+          is_countable: extra.is_countable
         }))
         
         const { error: extraError } = await supabase
@@ -387,6 +416,67 @@ export default function NewProductPage() {
               </div>
             </div>
 
+            {/* Seção de Combos */}
+            <div className="border rounded-lg p-4 bg-gray-50">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="isCombo"
+                    checked={isCombo}
+                    onChange={(e) => setIsCombo(e.target.checked)}
+                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                  />
+                  <label htmlFor="isCombo" className="ml-2 block text-sm font-medium text-gray-700">
+                    Este produto é um combo (ex: 30 salgados variados)
+                  </label>
+                </div>
+              </div>
+
+              {isCombo && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="comboQuantity" className="block text-sm font-medium text-gray-700 mb-1">
+                        Quantidade do combo *
+                      </label>
+                      <input
+                        id="comboQuantity"
+                        type="text"
+                        value={comboQuantity}
+                        onChange={(e) => setComboQuantity(e.target.value.replace(/[^0-9]/g, ''))}
+                        required={isCombo}
+                        className="input"
+                        placeholder="30"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Ex: 30 para combo de 30 salgados
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label htmlFor="comboDescription" className="block text-sm font-medium text-gray-700 mb-1">
+                        Descrição do combo
+                      </label>
+                      <input
+                        id="comboDescription"
+                        type="text"
+                        value={comboDescription}
+                        onChange={(e) => setComboDescription(e.target.value)}
+                        className="input"
+                        placeholder="Escolha 30 salgados variados"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-2 text-sm text-gray-500">
+                    <p>Para combos, os adicionais serão os itens que o cliente pode escolher (ex: tipos de salgados).</p>
+                    <p>Configure os adicionais abaixo com as quantidades mínimas e máximas para cada item.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Seção de Variações (tamanhos, sabores, etc) */}
             <div className="border rounded-lg p-4 bg-gray-50">
               <div className="flex items-center justify-between mb-4">
@@ -483,7 +573,7 @@ export default function NewProductPage() {
                     className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                   />
                   <label htmlFor="hasExtras" className="ml-2 block text-sm font-medium text-gray-700">
-                    Este produto possui adicionais opcionais
+                    {isCombo ? 'Configure os itens do combo (tipos de salgados)' : 'Este produto possui adicionais opcionais'}
                   </label>
                 </div>
                 {hasExtras && (
@@ -496,7 +586,7 @@ export default function NewProductPage() {
                       <line x1="12" y1="5" x2="12" y2="19" />
                       <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
-                    <span>Adicionar Item</span>
+                    <span>{isCombo ? 'Adicionar Item do Combo' : 'Adicionar Item'}</span>
                   </button>
                 )}
               </div>
@@ -517,7 +607,7 @@ export default function NewProductPage() {
                                 type="text"
                                 value={extra.name}
                                 onChange={(e) => updateExtra(index, 'name', e.target.value)}
-                                placeholder="Nome do adicional (ex: Bacon, Queijo Extra)"
+                                placeholder={isCombo ? "Nome do salgado (ex: Coxinha, Pastel)" : "Nome do adicional (ex: Bacon, Queijo Extra)"}
                                 className="input py-2 mb-2 w-full"
                               />
                             </div>
@@ -548,23 +638,74 @@ export default function NewProductPage() {
                               </svg>
                             </button>
                           </div>
-                          <div className="flex items-center mt-2">
-                            <input
-                              type="checkbox"
-                              id={`required-${index}`}
-                              checked={extra.required}
-                              onChange={(e) => updateExtra(index, 'required', e.target.checked)}
-                              className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
-                            />
-                            <label htmlFor={`required-${index}`} className="ml-2 text-sm text-gray-700">
-                              Este adicional é obrigatório
-                            </label>
-                            {extra.required && (
-                              <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
-                                Obrigatório
-                              </span>
-                            )}
-                          </div>
+                          
+                          {/* Configurações específicas para combos */}
+                          {isCombo && (
+                            <div className="mt-3 space-y-3">
+                              <div className="flex items-center">
+                                <input
+                                  type="checkbox"
+                                  id={`countable-${index}`}
+                                  checked={extra.is_countable}
+                                  onChange={(e) => updateExtra(index, 'is_countable', e.target.checked)}
+                                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                                />
+                                <label htmlFor={`countable-${index}`} className="ml-2 text-sm text-gray-700">
+                                  Este item tem controle de quantidade no combo
+                                </label>
+                              </div>
+                              
+                              {extra.is_countable && (
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Quantidade mínima
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={extra.min_quantity}
+                                      onChange={(e) => updateExtra(index, 'min_quantity', e.target.value)}
+                                      placeholder="5"
+                                      className="input py-1 w-full"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                      Quantidade máxima (opcional)
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={extra.max_quantity || ''}
+                                      onChange={(e) => updateExtra(index, 'max_quantity', e.target.value)}
+                                      placeholder="Ilimitado"
+                                      className="input py-1 w-full"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Configurações para adicional obrigatório (não combo) */}
+                          {!isCombo && (
+                            <div className="flex items-center mt-2">
+                              <input
+                                type="checkbox"
+                                id={`required-${index}`}
+                                checked={extra.required}
+                                onChange={(e) => updateExtra(index, 'required', e.target.checked)}
+                                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                              />
+                              <label htmlFor={`required-${index}`} className="ml-2 text-sm text-gray-700">
+                                Este adicional é obrigatório
+                              </label>
+                              {extra.required && (
+                                <span className="ml-2 px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
+                                  Obrigatório
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -574,7 +715,17 @@ export default function NewProductPage() {
 
               {hasExtras && (
                 <div className="mt-2 text-sm text-gray-500">
-                  Os adicionais podem ser opcionais ou obrigatórios. Adicionais obrigatórios devem ser selecionados pelo cliente antes de adicionar ao carrinho. Você pode deixar o preço em 0.00 para adicionais gratuitos.
+                  {isCombo ? (
+                    <p>
+                      Para combos, os adicionais representam os itens que o cliente pode escolher (ex: tipos de salgados). 
+                      Configure as quantidades mínimas e máximas para cada item do combo.
+                    </p>
+                  ) : (
+                    <p>
+                      Os adicionais podem ser opcionais ou obrigatórios. Adicionais obrigatórios devem ser selecionados pelo cliente antes de adicionar ao carrinho. 
+                      Você pode deixar o preço em 0.00 para adicionais gratuitos.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
